@@ -29,21 +29,21 @@
 - Search, advanced ranking/recommendations, analytics, and LLM summaries.
 
 ### 1.4 Decisions
-| Decision                                                                                                       | Rationale                                                                                                 |
-|----------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
-| Modular monolith; **do not** split into NestJS and a separate database                                         | Less operational overhead, shared data, and no current scaling pressure                                   |
-| Put the crawler behind an interface (port)                                                                     | Makes it easier to extract a standalone worker later                                                      |
-| Crawl by **source**, not by user                                                                               | Each source is crawled once and matched for all users                                                     |
-| Prefer RSS/sitemaps; use Jsoup for static HTML                                                                 | More stable and less prone to breakage                                                                    |
-| GitHub Actions runs daily and calls an endpoint; “Crawl now” uses the same flow                                | Render Cron Jobs have a minimum charge; Free Web Services sleep when idle, so do not rely on `@Scheduled` |
-| Store metadata, snippets, and original links only                                                              | Readers visit the publisher’s site; this limits storage and third-party content retained in the database  |
-| Frontend: **React SPA (Vite + TypeScript) and PWA first**, Flutter after the frontend and backend are complete | Provides an early demo link, static hosting has no cold start, and Flutter is a later learning phase      |
-| Do not use Next.js or React Native                                                                             | This is a personal feed behind login and does not need SSR/SEO; Flutter is already planned for phase 2    |
-| Authenticate with JWT in headers, **not** browser cookies/sessions                                             | The SPA and Flutter app share one authentication mechanism                                                |
-| Keep business logic (matching, read state, pagination) in the backend                                          | Flutter only needs to reimplement the UI                                                                  |
-| Use MySQL as the primary relational database                                                                  | Topics, articles, selections, read state, and crawl state rely on relationships, joins, constraints, and transactions |
-| Treat database traffic as read-heavy (working estimate: about 10:1 reads to writes), with bursty writes during crawls | Fan out matches into `topic_article` for straightforward feed reads; treat the ratio as an assumption to validate with synthetic-data load tests |
-| Use Java 25 LTS and Spring Boot 4.x as the project baseline                                                    | Java 25 is the chosen LTS JDK; Spring Boot 4 is the chosen generation, with a supported minor selected by its support lifecycle; no individual Java feature is a selection criterion |
+| Decision                                                                                                              | Rationale                                                                                                                                                                            |
+|-----------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Modular monolith; **do not** split into NestJS and a separate database                                                | Less operational overhead, shared data, and no current scaling pressure                                                                                                              |
+| Put the crawler behind an interface (port)                                                                            | Makes it easier to extract a standalone worker later                                                                                                                                 |
+| Crawl by **source**, not by user                                                                                      | Each source is crawled once and matched for all users                                                                                                                                |
+| Prefer RSS/sitemaps; use Jsoup for static HTML                                                                        | More stable and less prone to breakage                                                                                                                                               |
+| GitHub Actions runs daily and calls an endpoint; “Crawl now” uses the same flow                                       | Render Cron Jobs have a minimum charge; Free Web Services sleep when idle, so do not rely on `@Scheduled`                                                                            |
+| Store metadata, snippets, and original links only                                                                     | Readers visit the publisher’s site; this limits storage and third-party content retained in the database                                                                             |
+| Frontend: **React SPA (Vite + TypeScript) and PWA first**, Flutter after the frontend and backend are complete        | Provides an early demo link, static hosting has no cold start, and Flutter is a later learning phase                                                                                 |
+| Do not use Next.js or React Native                                                                                    | This is a personal feed behind login and does not need SSR/SEO; Flutter is already planned for phase 2                                                                               |
+| Authenticate with JWT in headers, **not** browser cookies/sessions                                                    | The SPA and Flutter app share one authentication mechanism                                                                                                                           |
+| Keep business logic (matching, read state, pagination) in the backend                                                 | Flutter only needs to reimplement the UI                                                                                                                                             |
+| Use MySQL as the primary relational database                                                                          | Topics, articles, selections, read state, and crawl state rely on relationships, joins, constraints, and transactions                                                                |
+| Treat database traffic as read-heavy (working estimate: about 10:1 reads to writes), with bursty writes during crawls | Fan out matches into `topic_article` for straightforward feed reads; treat the ratio as an assumption to validate with synthetic-data load tests                                     |
+| Use Java 25 LTS and Spring Boot 4.x as the project baseline                                                           | Java 25 is the chosen LTS JDK; Spring Boot 4 is the chosen generation, with a supported minor selected by its support lifecycle; no individual Java feature is a selection criterion |
 
 ---
 
@@ -314,18 +314,18 @@ Conventions: return errors in a consistent RFC 7807 Problem Details format. Keep
 
 The project baseline is **Java 25 LTS + Spring Boot 4** as the chosen long-term baseline. Java 25 is an LTS JDK; Spring Boot uses its own release/support policy rather than Java's LTS designation, so select a supported Spring Boot 4.x minor and verify its support window during setup. Do not justify this choice by a specific JEP or language/runtime feature. In TFL-1, verify that the selected Spring Boot release, build tool, libraries, CI JDK, container base image, and deployment runtime are compatible. If a required dependency or hosting platform blocks the baseline, use Java 21 as a fallback without changing the architecture and record the reason in an ADR. Avoid preview and incubator APIs in the baseline.
 
-| Concept                                      | Where it is used                                                                                      | Interview discussion point                         |
-|----------------------------------------------|-------------------------------------------------------------------------------------------------------|----------------------------------------------------|
+| Concept                                      | Where it is used                                                                                      | Interview discussion point                                         |
+|----------------------------------------------|-------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------|
 | Virtual threads                              | Fetch multiple sources concurrently (`newVirtualThreadPerTaskExecutor`) with a per-domain `Semaphore` | I/O-bound workloads; benchmark against platform threads on Java 25 |
-| Stream / Collectors                          | Parse → normalize → deduplicate → match pipeline; `groupingBy` by topic                               | Declarative pipelines that are easy to test        |
-| Records, sealed interfaces, pattern matching | `CrawlResult = Success \| Failed \| Skipped`                                                          | Model states safely                                |
-| Strategy + Registry/Factory                  | Select an RSS or HTML `SourceParser` by `source.type`                                                 | Add sources without modifying existing code (OCP)  |
-| Template Method                              | Shared fetch → parse → map flow                                                                       | Reuse common process steps                         |
-| Decorator                                    | Wrap `Fetcher` with retries, rate limits, and robots.txt checks                                       | Add behavior without changing the original class   |
-| Chain of Responsibility / Pipeline           | Filtering steps: deduplicate → include → exclude                                                      | Keep steps separate and easy to add/remove         |
-| Specification                                | Represent topic-matching rules                                                                        | Compose and test rules independently               |
-| Observer / Domain event                      | `ArticlesIngested` → matching                                                                         | Reduce coupling between modules                    |
-| Ports & Adapters                             | Use full ports and adapters in `crawler`, lightweight boundaries in `matching`                        | Match architecture weight to module complexity     |
+| Stream / Collectors                          | Parse → normalize → deduplicate → match pipeline; `groupingBy` by topic                               | Declarative pipelines that are easy to test                        |
+| Records, sealed interfaces, pattern matching | `CrawlResult = Success \| Failed \| Skipped`                                                          | Model states safely                                                |
+| Strategy + Registry/Factory                  | Select an RSS or HTML `SourceParser` by `source.type`                                                 | Add sources without modifying existing code (OCP)                  |
+| Template Method                              | Shared fetch → parse → map flow                                                                       | Reuse common process steps                                         |
+| Decorator                                    | Wrap `Fetcher` with retries, rate limits, and robots.txt checks                                       | Add behavior without changing the original class                   |
+| Chain of Responsibility / Pipeline           | Filtering steps: deduplicate → include → exclude                                                      | Keep steps separate and easy to add/remove                         |
+| Specification                                | Represent topic-matching rules                                                                        | Compose and test rules independently                               |
+| Observer / Domain event                      | `ArticlesIngested` → matching                                                                         | Reduce coupling between modules                                    |
+| Ports & Adapters                             | Use full ports and adapters in `crawler`, lightweight boundaries in `matching`                        | Match architecture weight to module complexity                     |
 
 Note: use a pattern only when it solves a concrete problem, and record the rationale in an ADR.
 
@@ -647,30 +647,30 @@ How to read this section:
 
 ## 11. Risks and mitigations
 
-| Risk                                        | Mitigation                                                                                                                                 |
-|---------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
-| HTML parsers are fragile and time-consuming | Use 5–10 RSS sources for the MVP; keep HTML for CV-grade work                                                                              |
-| Cold starts slow the demo                   | Show a waiting screen in the frontend; include a video/GIF and README note                                                                 |
-| Exhausting the 750 free hours               | No keep-alive; scheduled Actions and user traffic both consume hours while the service runs; monitor workspace usage                       |
-| Free MySQL expires or has storage limits    | Monitor storage, purge trashed items, and prepare to switch providers                                                                      |
-| Copyright/legal issues                      | Store metadata and original links only; respect robots.txt and rate limits                                                                 |
-| Incorrect matches (short words, Vietnamese) | Use word-boundary matching and table-driven tests                                                                                          |
-| Scope creep                                 | Keep an out-of-MVP list; add items only after the vertical slice works                                                                     |
+| Risk                                        | Mitigation                                                                                                                                |
+|---------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
+| HTML parsers are fragile and time-consuming | Use 5–10 RSS sources for the MVP; keep HTML for CV-grade work                                                                             |
+| Cold starts slow the demo                   | Show a waiting screen in the frontend; include a video/GIF and README note                                                                |
+| Exhausting the 750 free hours               | No keep-alive; scheduled Actions and user traffic both consume hours while the service runs; monitor workspace usage                      |
+| Free MySQL expires or has storage limits    | Monitor storage, purge trashed items, and prepare to switch providers                                                                     |
+| Copyright/legal issues                      | Store metadata and original links only; respect robots.txt and rate limits                                                                |
+| Incorrect matches (short words, Vietnamese) | Use word-boundary matching and table-driven tests                                                                                         |
+| Scope creep                                 | Keep an out-of-MVP list; add items only after the vertical slice works                                                                    |
 | Frontend drifts from the API                | Configure Swagger UI in TFL-1 and update it with each endpoint; finalize/version the JSON in TFL-11 before generating the frontend client |
-| PRs are too large to review                 | Apply size guidelines and split along pure logic/persistence/API boundaries                                                                |
+| PRs are too large to review                 | Apply size guidelines and split along pure logic/persistence/API boundaries                                                               |
 
 ---
 
 ## 12. Milestones
 
-| Milestone | Outcome              | Completion criteria                                                                                                                             |
-|-----------|----------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
-| M1        | API contract ready   | Complete TFL-1…TFL-11: auth/sources/topics/RSS crawl/feed work, Swagger annotations are complete, and `docs/openapi.json` can generate clients |
-| M2        | MVP backend complete | Complete TFL-20, TFL-21, and TFL-23: backfill, durable triggers, multiple sources/topics, read state, and independent trash lifecycles          |
-| M3        | Running in the cloud | Complete TFL-22; scheduled crawling and TFL-21 recovery run reliably for at least one week                                                      |
-| M4        | React frontend demo  | Complete TFL-12…TFL-18; integrate TFL-21 trigger and TFL-23 trash APIs after the backend contracts merge; main flows work on a phone            |
+| Milestone | Outcome              | Completion criteria                                                                                                                               |
+|-----------|----------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| M1        | API contract ready   | Complete TFL-1…TFL-11: auth/sources/topics/RSS crawl/feed work, Swagger annotations are complete, and `docs/openapi.json` can generate clients    |
+| M2        | MVP backend complete | Complete TFL-20, TFL-21, and TFL-23: backfill, durable triggers, multiple sources/topics, read state, and independent trash lifecycles            |
+| M3        | Running in the cloud | Complete TFL-22; scheduled crawling and TFL-21 recovery run reliably for at least one week                                                        |
+| M4        | React frontend demo  | Complete TFL-12…TFL-18; integrate TFL-21 trigger and TFL-23 trash APIs after the backend contracts merge; main flows work on a phone              |
 | M5        | Résumé package       | Complete TFL-24…TFL-28, TFL-33…TFL-35, and TFL-19: README, ADRs, observability, feed load results, near-duplicate evaluation, and demo link/video |
-| M6        | Flutter (optional)   | Complete TFL-29…TFL-32; add push notifications if desired                                                                                       |
+| M6        | Flutter (optional)   | Complete TFL-29…TFL-32; add push notifications if desired                                                                                         |
 
 ## 13. Post-MVP backlog (ranked by résumé value per effort)
 
