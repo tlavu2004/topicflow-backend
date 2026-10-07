@@ -4,10 +4,10 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class TopicflowApplication {
+public class TopicFlowApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(TopicflowApplication.class, args);
+		SpringApplication.run(TopicFlowApplication.class, args);
 	}
 
 }
