@@ -1,4 +1,4 @@
-﻿# TopicFlow (TFL) — Implementation Plan
+# TopicFlow (TFL) — Implementation Plan
 
 > Portfolio project: a news aggregator organized by **topics** (include and exclude keywords), with optional news sources and read/unread tracking.
 > - Jira key: **TFL**
@@ -10,8 +10,8 @@
 ## 1. Goals and scope
 
 ### 1.1 Goals
-- Build and deploy a working product to showcase Java/Spring backend skills on a résumé.
-- Learn and demonstrate a modular monolith, ports and adapters, parallel crawling with virtual threads, idempotent jobs, internal events, pagination, testing, and CI.
+- Build and deploy a working product to showcase Java/Spring backend skills on a résumé. Prioritize completing and stabilizing M3 before beginning optional CV-grade expansions.
+- Learn and demonstrate a modular monolith, module-appropriate architecture, parallel crawling with virtual threads, idempotent jobs, internal events, pagination, testing, and CI.
 
 ### 1.2 MVP scope
 - User registration and login (JWT).
@@ -41,6 +41,9 @@
 | Do not use Next.js or React Native                                                                             | This is a personal feed behind login and does not need SSR/SEO; Flutter is already planned for phase 2    |
 | Authenticate with JWT in headers, **not** browser cookies/sessions                                             | The SPA and Flutter app share one authentication mechanism                                                |
 | Keep business logic (matching, read state, pagination) in the backend                                          | Flutter only needs to reimplement the UI                                                                  |
+| Use MySQL as the primary relational database                                                                  | Topics, articles, selections, read state, and crawl state rely on relationships, joins, constraints, and transactions |
+| Treat database traffic as read-heavy (working estimate: about 10:1 reads to writes), with bursty writes during crawls | Fan out matches into `topic_article` for straightforward feed reads; treat the ratio as an assumption to validate with synthetic-data load tests |
+| Use Java 25 LTS and Spring Boot 4.x as the project baseline                                                    | Java 25 is the chosen LTS JDK; Spring Boot 4 is the chosen generation, with a supported minor selected by its support lifecycle; no individual Java feature is a selection criterion |
 
 ---
 
@@ -96,6 +99,14 @@ Java base package: `com.<yourname>.topicflow`, with one subpackage per module as
 - Modules communicate only through public services/interfaces or events; **business logic must not join tables across modules**.
 - `crawler` publishes an `ArticlesIngested` event; `matching` consumes and processes it.
 - Enforce module boundaries with ArchUnit or Spring Modulith.
+
+### 2.1.1 Architecture style by module
+- Keep the overall application a modular monolith; choose the internal style based on each module's complexity, not for uniformity.
+- `crawler`: use ports and adapters (hexagonal architecture), since fetching, parsing, scheduling, and persistence have distinct external adapters and may later need a standalone worker.
+- `matching`: use a lightweight hexagonal boundary around pure matching rules so they can be tested without Spring or a database.
+- `identity`, `source`, and `topic`: use straightforward layered architecture while their workflows remain simple.
+- `article`: use layered writes plus a focused feed/read model for read-heavy queries; this is CQRS-lite, not a separate service or a full CQRS framework.
+- Keep domain logic independent of Spring and JPA where practical. Record this module-specific rationale in ADR-001 and enforce dependency direction (`adapter → application → domain`) with architecture tests.
 
 ### 2.2 Crawl flow
 1. GitHub Actions or a user calls the trigger. The backend persists a `QUEUED` `crawl_run` in MySQL and returns `202` with a `runId`. `202` means the request was stored and queued; crawling is not complete. If a run is already active, return that run or `409` as defined by the API contract; do not start a concurrent run.
@@ -299,11 +310,13 @@ Conventions: return errors in a consistent RFC 7807 Problem Details format. Keep
 
 ---
 
-## 6. Java features and design patterns (tied to real use cases)
+## 6. Java baseline, features, and design patterns (tied to real use cases)
+
+The project baseline is **Java 25 LTS + Spring Boot 4** as the chosen long-term baseline. Java 25 is an LTS JDK; Spring Boot uses its own release/support policy rather than Java's LTS designation, so select a supported Spring Boot 4.x minor and verify its support window during setup. Do not justify this choice by a specific JEP or language/runtime feature. In TFL-1, verify that the selected Spring Boot release, build tool, libraries, CI JDK, container base image, and deployment runtime are compatible. If a required dependency or hosting platform blocks the baseline, use Java 21 as a fallback without changing the architecture and record the reason in an ADR. Avoid preview and incubator APIs in the baseline.
 
 | Concept                                      | Where it is used                                                                                      | Interview discussion point                         |
 |----------------------------------------------|-------------------------------------------------------------------------------------------------------|----------------------------------------------------|
-| Virtual threads                              | Fetch multiple sources concurrently (`newVirtualThreadPerTaskExecutor`) with a per-domain `Semaphore` | I/O-bound workloads; compare with platform threads |
+| Virtual threads                              | Fetch multiple sources concurrently (`newVirtualThreadPerTaskExecutor`) with a per-domain `Semaphore` | I/O-bound workloads; benchmark against platform threads on Java 25 |
 | Stream / Collectors                          | Parse → normalize → deduplicate → match pipeline; `groupingBy` by topic                               | Declarative pipelines that are easy to test        |
 | Records, sealed interfaces, pattern matching | `CrawlResult = Success \| Failed \| Skipped`                                                          | Model states safely                                |
 | Strategy + Registry/Factory                  | Select an RSS or HTML `SourceParser` by `source.type`                                                 | Add sources without modifying existing code (OCP)  |
@@ -312,7 +325,7 @@ Conventions: return errors in a consistent RFC 7807 Problem Details format. Keep
 | Chain of Responsibility / Pipeline           | Filtering steps: deduplicate → include → exclude                                                      | Keep steps separate and easy to add/remove         |
 | Specification                                | Represent topic-matching rules                                                                        | Compose and test rules independently               |
 | Observer / Domain event                      | `ArticlesIngested` → matching                                                                         | Reduce coupling between modules                    |
-| Ports & Adapters                             | Put `crawler` behind an interface                                                                     | Prepare for extracting a worker later              |
+| Ports & Adapters                             | Use full ports and adapters in `crawler`, lightweight boundaries in `matching`                        | Match architecture weight to module complexity     |
 
 Note: use a pattern only when it solves a concrete problem, and record the rationale in an ADR.
 
@@ -346,48 +359,52 @@ Schedule estimate: at 4–5 hours/day, about 4–6 weeks (Lean) or 6–9 weeks (
 ## 8. Detailed Jira story plan
 
 How to read this section:
-- Each item is a Jira story numbered `TFL-01`…`TFL-32` across backend, frontend, and mobile; `[BE]`, `[FE]`, and `[Mobile]` identify repository/scope. Implement each story in one PR; checkboxes are subtasks.
+- Each item is a Jira story numbered `TFL-1`…`TFL-32` across backend, frontend, and mobile; do not zero-pad IDs, so numbering can grow past 99. `[BE]`, `[FE]`, and `[Mobile]` identify repository/scope. Implement each story in one PR; checkboxes are subtasks.
 - Items marked **(CV)** are CV-grade only; unmarked items are included in both Lean and CV-grade.
 - Tests for a feature belong in that feature’s PR.
 - The numbering reflects dependencies and the earliest practical start. Frontend stories TFL-12…TFL-19 can begin right after TFL-11; backend stories TFL-20…TFL-28 can proceed in parallel because they do not block the API contract. Mobile stories TFL-29…TFL-32 follow the required frontend/backend milestones. The phases below group stories by scope; Jira numbers remain the priority/start order.
 
 ### P0 — Foundation (`topicflow-backend`)
 
-**TFL-01 [BE] — Foundation + minimal CI**
+**TFL-1 [BE] — Foundation + minimal CI**
 - [ ] Repository, `.gitignore`, license, and README skeleton
-- [ ] Spring Boot (Java 21+), build tool, and module-based package structure
+- [ ] Java 25 LTS + Spring Boot 4; verify selected release compatibility with build tools, Lombok (if used), ArchUnit/Spring Modulith, MapStruct (if used), Testcontainers, Flyway, CI JDK, Docker base image, and deployment runtime
+- [ ] Keep Java 21 as a fallback only if a required dependency or host blocks Java 25; document the reason in an ADR
+- [ ] Build tool and module-based package structure
 - [ ] Docker Compose for local MySQL
 - [ ] Flyway baseline
 - [ ] `local` / `prod` profiles with environment-based configuration
 - [ ] Shared, consistent error format (Problem Details)
 - [ ] Add springdoc and Swagger UI for local/dev profiles; document each endpoint in its feature PR
 - [ ] Basic GitHub Actions CI: build and run unit tests on every PR/push; cache dependencies
-- [ ] No MySQL in CI yet; add a Testcontainers/MySQL integration stage in TFL-03 after TFL-02 adds the first migration and tests
-- [ ] Module-boundary checks (ArchUnit/Spring Modulith)
-- [ ] ADR-001: modular monolith; do not split services
+- [ ] No MySQL in CI yet; add a Testcontainers/MySQL integration stage in TFL-3 after TFL-2 adds the first migration and tests
+- [ ] Module-boundary checks (ArchUnit/Spring Modulith), including dependency direction and no domain imports from Spring/JPA
+- [ ] ADR-001: modular monolith and module-specific architecture styles; do not split services
+- [ ] ADR-002: Java 25 LTS + Spring Boot 4 baseline and compatibility/fallback policy
 
 ### P1 — Core domain
 
-**TFL-02 [BE] — Auth & users**
+**TFL-2 [BE] — Auth & users**
 - [ ] `users` migration
 - [ ] Registration/login and password hashing (BCrypt/Argon2)
 - [ ] JWT access and refresh tokens in headers; security filter
 - [ ] Set up a reusable MySQL Testcontainers base class for later PRs
+- [ ] Rate-limit login attempts using account and client/network signals; return a consistent error and test the policy
 - [ ] Tests: duplicate email registration, wrong password, expired token
 
-**TFL-03 [BE] — CI integration-test profile** *(after TFL-02, before TFL-04)*
+**TFL-3 [BE] — CI integration-test profile** *(after TFL-2, before TFL-4)*
 - [ ] Separate unit and integration tests using profiles/tags
 - [ ] CI starts MySQL Testcontainers, runs Flyway migrations, and executes integration tests
 - [ ] Retain logs/test reports on failure; do not store secrets or real data in artifacts
 
-**TFL-04 [BE] — Sources**
+**TFL-4 [BE] — Sources**
 - [ ] `source` and `user_source` migrations
 - [ ] Seed 5–10 stable RSS sources
 - [ ] `GET /sources` with the user’s `selected` flag
 - [ ] `PUT /me/sources` (users can add/remove sources at any time)
 - [ ] API tests
 
-**TFL-05 [BE] — Topics & keywords**
+**TFL-5 [BE] — Topics & keywords**
 - [ ] `topic` and `topic_keyword` migrations
 - [ ] `TextNormalizer` (lowercase, remove diacritics, collapse whitespace) + unit tests (reused by matching)
 - [ ] Topic CRUD (verify ownership)
@@ -395,18 +412,18 @@ How to read this section:
 - [ ] Per-user topic/keyword limits
 - [ ] Validation and access-control tests
 
-*(If TFL-05 exceeds about 8 hours, split “topic CRUD” and “keywords + TextNormalizer” into two PRs.)*
+*(If TFL-5 exceeds about 8 hours, split “topic CRUD” and “keywords + TextNormalizer” into two PRs.)*
 
 ### P2 — Vertical crawler slice
 
-**TFL-06 [BE] — Fetch & parse (pure logic, no database yet)**
+**TFL-6 [BE] — Fetch & parse (pure logic, no database yet)**
 - [ ] `Fetcher` and `SourceParser` interfaces (ports)
 - [ ] `HttpFetcher` (timeouts, User-Agent, response-size limit)
 - [ ] `RssParser` → `ParsedArticle` (record)
 - [ ] Canonicalize URLs and calculate `url_hash`
 - [ ] Test the parser with a saved real-world RSS fixture; test URL canonicalization
 
-**TFL-07 [BE] — Persist articles & run crawls**
+**TFL-7 [BE] — Persist articles & run crawls**
 - [ ] Migrations for `article`, `crawl_run`, `crawl_source_result`, `crawl_lock`, and `outbox_event`
 - [ ] Persist articles and ignore duplicates (unique `url_hash`)
 - [ ] Write `ArticlesIngested` to a transactional outbox in the same transaction; dispatcher retries with at-least-once delivery
@@ -417,12 +434,12 @@ How to read this section:
 
 ### P3 — Matching, feed, read state, and API contract
 
-**TFL-08 [BE] — Matching rules (pure logic)**
+**TFL-8 [BE] — Matching rules (pure logic)**
 - [ ] Specification: at least one INCLUDE and no EXCLUDE match
 - [ ] Match on word boundaries; support phrases; normalize with `TextNormalizer`
 - [ ] Table-driven tests (Vietnamese diacritics, short words, duplicates, exclude overrides include)
 
-**TFL-09 [BE] — Connect matching to ingestion**
+**TFL-9 [BE] — Connect matching to ingestion**
 - [ ] `topic_article` migration
 - [ ] Outbox listener for `ArticlesIngested`: find topics whose users selected the source, apply matching rules, and idempotently upsert `topic_article`
 - [ ] Mark the event processed only after matching commits; retries must not create duplicates
@@ -434,6 +451,7 @@ How to read this section:
 - [ ] `PUT/DELETE /articles/{id}/read`
 - [ ] `POST /topics/{id}/read-all`
 - [ ] Check `EXPLAIN` and add necessary indexes
+- [ ] Treat `(topic_id, article_id DESC)` as an index candidate; validate ordering and additional predicates against actual queries with `EXPLAIN`
 - [ ] Test pagination for gaps/duplicates when new articles arrive
 - [ ] Update Swagger annotations for feed/read endpoints
 
@@ -481,7 +499,7 @@ How to read this section:
 - [ ] Ensure matching/backfill does not restore dismissed associations
 - [ ] Test ownership, independent trash lifecycles, restoration, expiry, and shared data
 
-### P5 — Crawler hardening **(CV)**
+### P5 — Crawler hardening **(CV; begin after M3)**
 
 **TFL-24 [BE] — Refactor Strategy/Template (no behavior change)** **(CV)**
 - [ ] Registry selects a parser by `source.type` (Strategy + Factory)
@@ -506,16 +524,34 @@ How to read this section:
 - [ ] Real-world HTML fixtures and parser tests
 - [ ] Document the risk of parsers breaking when a source changes its structure
 
-### P6 — Polish
+### P6 — Polish **(CV; begin after M3)**
 
 **TFL-28 [BE] — Documentation & quality** *(Lean: minimal README only)*
 - [ ] README: goals, local setup, and deployment
 - [ ] Architecture and crawl-flow diagrams **(CV)**
 - [ ] 3–5 short ADRs (monolith, external scheduler, metadata-only storage, matching, database host) **(CV)**
 - [ ] CI badge and test-coverage report **(CV)**
-- [ ] Micrometer + Actuator crawl metrics: duration, source success/failure, new articles, active jobs (avoid high-cardinality labels such as URL/user ID)
-- [ ] Minimal Grafana dashboard and alerts for repeated crawl failures or missed scheduled crawls; document setup in the README **(CV)**
 - [ ] Clean up code/naming and resolve TODOs or create tickets for them
+
+**TFL-33 [BE] — Crawl observability** **(CV; after M3)**
+- [ ] Micrometer + Actuator metrics for crawl duration, source success/failure, new articles, retries, and active/queued runs; avoid high-cardinality labels such as URL or user ID
+- [ ] Minimal Grafana dashboard and alerts for repeated crawl failures or missed scheduled runs
+- [ ] Document metric meaning, dashboard setup, and alert thresholds
+
+**TFL-34 [BE] — Feed load test** **(CV; after M3)**
+- [ ] Generate a reproducible synthetic dataset representing documented topic/article/read-state volumes
+- [ ] Use k6 to exercise feed pagination and read filters; record p50/p95/p99 latency and test environment
+- [ ] Use the measurements to validate read-heavy assumptions and revisit indexes only when the evidence supports a change
+
+**TFL-35 [BE] — Near-duplicate article detection** **(CV; after observability)**
+- [ ] Calculate SimHash fingerprints from normalized titles/snippets while preserving each publisher article and URL
+- [ ] Generate candidate groups without automatically hiding or merging articles initially
+- [ ] Evaluate precision/recall on a labeled sample before enabling automatic grouping
+
+**TFL-36 [BE] — Extract crawl worker and queue** **(CV; only after measured need)**
+- [ ] Record the operational/load reason for extraction and compare it with the in-process durable runner
+- [ ] Add a queue, retry policy, dead-letter handling, idempotent consumers, and worker metrics
+- [ ] Keep source fetches, database transactions, and event delivery independently observable
 
 ### P7 — React SPA/PWA frontend (`topicflow-frontend`)
 
@@ -585,7 +621,7 @@ How to read this section:
    - separate repositories use separate PRs.
 4. **Size:** target 3–8 hours of work and fewer than ~400–500 changed lines (excluding generated files, seeds, and fixtures). Split larger changes along *pure logic → persistence → API* boundaries.
 5. **Cross-repository contract:** merge the backend PR and update `openapi.json` **first**; frontend/mobile then regenerate their clients in their own PRs. Do not change the API and its client in the same PR when repositories are separate.
-6. **Jira:** each `TFL-xx` heading is a story; use the same key in the PR title and link the story. Checkboxes are subtasks. Close the story when the PR is merged and meets the Definition of Done.
+6. **Jira:** each `TFL-n` heading is a story; do not zero-pad the numeric ID. Use the same key in the PR title and link the story. Checkboxes are subtasks. Close the story when the PR is merged and meets the Definition of Done.
 7. **Definition of Done for each PR:**
    - [ ] Build and tests pass in CI
    - [ ] Migration runs against an empty database
@@ -600,9 +636,9 @@ How to read this section:
 - [ ] Working demo link (or short video/GIF with a note about cold starts)
 - [ ] README: goals, architecture, local setup, deployment
 - [ ] Architecture and crawl-flow diagrams
-- [ ] ADRs explaining key decisions
+- [ ] ADRs explaining module-specific architecture, runtime baseline, and key product/operations decisions
 - [ ] Green CI with Testcontainers
-- [ ] Measured results (virtual-thread benchmark, articles/second, crawl time for N sources)
+- [ ] Measured results (feed p95 under a documented synthetic dataset; Java 25 platform-thread vs virtual-thread benchmark; articles/second and crawl time for N sources)
 - [ ] Swagger UI available in an appropriate environment; `docs/openapi.json` is versioned and checked by CI
 - [ ] State that the frontend is a demo layer (AI-assisted); the focus is the backend
 - [ ] Prepare 5–7 interview answers: why a monolith, deduplication, idempotency, virtual threads, external scheduling, Vietnamese matching, and handling source layout changes
@@ -620,7 +656,7 @@ How to read this section:
 | Copyright/legal issues                      | Store metadata and original links only; respect robots.txt and rate limits                                                                 |
 | Incorrect matches (short words, Vietnamese) | Use word-boundary matching and table-driven tests                                                                                          |
 | Scope creep                                 | Keep an out-of-MVP list; add items only after the vertical slice works                                                                     |
-| Frontend drifts from the API                | Configure Swagger UI in TFL-01 and update it with each endpoint; finalize/version the JSON in TFL-11 before generating the frontend client |
+| Frontend drifts from the API                | Configure Swagger UI in TFL-1 and update it with each endpoint; finalize/version the JSON in TFL-11 before generating the frontend client |
 | PRs are too large to review                 | Apply size guidelines and split along pure logic/persistence/API boundaries                                                                |
 
 ---
@@ -629,22 +665,22 @@ How to read this section:
 
 | Milestone | Outcome              | Completion criteria                                                                                                                             |
 |-----------|----------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
-| M1        | API contract ready   | Complete TFL-01…TFL-11: auth/sources/topics/RSS crawl/feed work, Swagger annotations are complete, and `docs/openapi.json` can generate clients |
+| M1        | API contract ready   | Complete TFL-1…TFL-11: auth/sources/topics/RSS crawl/feed work, Swagger annotations are complete, and `docs/openapi.json` can generate clients |
 | M2        | MVP backend complete | Complete TFL-20, TFL-21, and TFL-23: backfill, durable triggers, multiple sources/topics, read state, and independent trash lifecycles          |
 | M3        | Running in the cloud | Complete TFL-22; scheduled crawling and TFL-21 recovery run reliably for at least one week                                                      |
 | M4        | React frontend demo  | Complete TFL-12…TFL-18; integrate TFL-21 trigger and TFL-23 trash APIs after the backend contracts merge; main flows work on a phone            |
-| M5        | Résumé package       | Complete TFL-24…TFL-28 and TFL-19: README, ADRs, benchmarks, and demo link/video                                                                |
+| M5        | Résumé package       | Complete TFL-24…TFL-28, TFL-33…TFL-35, and TFL-19: README, ADRs, observability, feed load results, near-duplicate evaluation, and demo link/video |
 | M6        | Flutter (optional)   | Complete TFL-29…TFL-32; add push notifications if desired                                                                                       |
 
 ## 13. Post-MVP backlog (ranked by résumé value per effort)
 
 1. **Observability** (estimated 6–10 hours): Micrometer + Actuator, crawl metrics, a minimal Grafana dashboard, and alerts for repeated source/run failures. A health endpoint does not replace metrics.
-2. **Basic feed ranking**: score by freshness, number of matched keywords, and source trust/priority; explain the score and evaluate it on fixtures before personalization.
-3. **Near-duplicate detection** (estimated 10–15 hours): use SimHash on titles/snippets; store fingerprints and candidate groups while retaining each source’s original article. Measure precision/recall on a sample set before automatically merging.
-4. **Search** (estimated 10–15 hours): start with MySQL FULLTEXT and the ngram parser; evaluate quality on Vietnamese text before considering Elasticsearch/OpenSearch.
-5. **FCM + email digest**: implement FCM with Flutter; treat email digest as a separate feature with opt-in, scheduling, and duplicate-send prevention. The earlier 10–15-hour estimate covers only a minimal scope and should be revisited based on the provider and opt-in flow.
-6. **Keyword recommendations** from read articles: suggest keywords for user approval rather than editing topics automatically; define how usefulness will be measured first.
-7. **Separate crawl worker + queue** (estimated 20–30 hours for an initial slice): add RabbitMQ/Kafka only when load or operational needs justify it; include retries, DLQ, idempotency, metrics, and the rationale for keeping a monolith until then. The estimate may increase if operations are included.
+2. **Near-duplicate detection** (estimated 10–15 hours): use SimHash on titles/snippets; store fingerprints and candidate groups while retaining each source’s original article. Measure precision/recall on a sample set before automatically grouping or hiding results.
+3. **Separate crawl worker + queue** (estimated 20–30 hours for an initial slice): add RabbitMQ/Kafka only when load or operational needs justify it; include retries, dead-letter handling, idempotency, metrics, and the rationale for keeping a monolith until then. The estimate may increase if operations are included.
+4. **Basic feed ranking**: score by freshness, number of matched keywords, and source trust/priority; explain the score and evaluate it on fixtures before personalization.
+5. **Search** (estimated 10–15 hours): start with MySQL FULLTEXT and the ngram parser; evaluate quality on Vietnamese text before considering Elasticsearch/OpenSearch.
+6. **FCM + email digest**: implement FCM with Flutter; treat email digest as a separate feature with opt-in, scheduling, and duplicate-send prevention. Revisit the estimate based on the provider and opt-in flow.
+7. **Keyword recommendations** from read articles: suggest keywords for user approval rather than editing topics automatically; define how usefulness will be measured first.
 8. **Redis**: add feed caching/rate limiting only after profiling identifies a bottleneck and benchmarks show a benefit.
 9. **LLM summaries**: experiment last, using snippets that may be sent to the service; control cost, usage rights, and data processing; do not store full article text.
 10. Add HTML parsers for more sources, prioritizing source stability and practical value.
