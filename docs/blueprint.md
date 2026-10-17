@@ -298,11 +298,11 @@ Note: use a pattern only when it solves a concrete problem, and record the ratio
 
 Assumption: one focused workday is about 4–5 hours. Estimates are planning ranges, not deadlines; add 15–25% contingency for integration, RSS instability, and deployment. Frontend time is separate.
 
-| Route                   | Ordered outcome                                                                                                                       | Backend target                                                                                    | Frontend                                            |
-|-------------------------|---------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------|-----------------------------------------------------|
-| **Lean core**           | TFL-1…TFL-11 (including TFL-3), TFL-20, TFL-21, TFL-22, simplified TFL-23, TFL-37, TFL-38, core TFL-28; stabilize the live/local demo | **~90–120 hours before contingency**; re-estimate after TFL-7/10 with reconciliation measurements | Minimal TFL-12…TFL-18: **~15–25 hours**, separately |
-| **Lean highlight**      | Once the sequential crawler and demo work, TFL-26 virtual threads + measured benchmark                                                | **~8–15 additional hours**                                                                        | No new frontend requirement                         |
-| **CV-grade extensions** | Choose TFL-24, TFL-25, TFL-27, TFL-33…TFL-36, TFL-19, and section 13 only for a concrete learning or product reason                   | Re-estimate each slice after Lean; the old 106–156 hour aggregate is withdrawn                    | PWA/Flutter separate                                |
+| Route                   | Ordered outcome                                                                                                                 | Backend target                                                                                    | Frontend                                                      |
+|-------------------------|---------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------|---------------------------------------------------------------|
+| **Lean core**           | Follow TFL-1…TFL-25 in order; backend stories are TFL-1…13, TFL-17…20, and TFL-25; frontend stories are TFL-14…16 and TFL-21…24 | **~90–120 hours before contingency**; re-estimate after TFL-7/10 with reconciliation measurements | Minimal TFL-14…16 and TFL-21…24: **~15–25 hours**, separately |
+| **Lean highlight**      | Once the sequential crawler and demo work, TFL-26 virtual threads + measured benchmark                                          | **~8–15 additional hours**                                                                        | No new frontend requirement                                   |
+| **CV-grade extensions** | Choose TFL-27…TFL-34 and section 13 only for a concrete learning or product reason                                              | Re-estimate each slice after Lean; the old 106–156 hour aggregate is withdrawn                    | PWA/Flutter separate                                          |
 
 At 4–5 focused hours/day, Lean core is roughly 5–8 weeks including ordinary interruptions; the benchmark and contingency extend that. Do not compress JPA/query work, test slices, README, or demo to meet a round number.
 
@@ -311,12 +311,13 @@ At 4–5 focused hours/day, Lean core is roughly 5–8 weeks including ordinary 
 ## 8. Detailed Jira story plan
 
 How to read this section:
-- Jira IDs are stable and are never zero-padded; new TFL-37/38 fill the JPA and test-slice gaps. `[BE]`, `[FE]`, and `[Mobile]` identify repository/scope. Implement each story in one independently reviewable PR; checkboxes are subtasks.
-- **Lean core order:** TFL-1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 37, 38, 11, 20, 21, 22, 23 (simplified), 28 (core), then minimal TFL-12…18. Start TFL-26 only after a working demo; it is the optional Lean highlight. **CV-grade route:** begin after the core and select extensions from P5/P6 and section 13. Items marked **(CV)** are outside Lean core.
-- Tests for a feature belong in that feature’s PR.
-- The phases group stories by scope; the explicit Lean list above gives implementation order. Frontend can begin after TFL-11; do not treat higher Jira numbers as lower priority. Mobile TFL-29…32 remains optional.
+- TFL-1…TFL-38 are the canonical task numbers **in execution order**; never zero-pad them. [BE], [FE], and [Mobile] identify repository/scope. Keep each PR independently reviewable; cross-repository stories use one linked PR per repository (section 9). Checkboxes are subtasks.
+- **Lean execution order:** complete TFL-1…TFL-25 in the order they appear below. React TFL-14…16 start after the TFL-13 API contract; React TFL-21…24 follow backend TFL-17…20. In particular, TFL-21 waits for TFL-20 and TFL-23 waits for TFL-18. Frontend work therefore begins before backend completion.
+- After the Lean demo, TFL-26 is the optional highlight, TFL-27…34 are optional CV-grade stories, and TFL-35…38 are optional Mobile stories. Follow numeric order for the stories you choose; skip unchosen optional stories without renumbering the rest.
+- Tests for a feature belong in that feature's PR. TFL-12 adds focused cross-slice coverage without postponing ordinary feature tests.
+- An optional deployment smoke check after TFL-3 or TFL-4 can expose Render/external-MySQL risks early; the full scheduler, status polling, and deployment work remain in TFL-19.
 
-### P0 — Foundation (`topicflow-backend`)
+### P0 — Foundation (topicflow-backend)
 
 **TFL-1 [BE] — Foundation + minimal CI**
 - [ ] **First:** verify the exact Spring Boot release against springdoc/OpenAPI and the chosen JWT library, then build a minimal Swagger UI + JWT smoke test before committing to the baseline
@@ -335,8 +336,6 @@ How to read this section:
 - [ ] ADR-001: modular monolith, module-owned writes, the feed's read-only cross-module SQL joins, and Java package boundary checks
 - [ ] Record the Java 25/Spring Boot 4 compatibility choice in the README or a short ADR
 
-### P1 — Core domain
-
 **TFL-2 [BE] — Auth & users**
 - [ ] `users` migration
 - [ ] Registration/login and password hashing (BCrypt/Argon2)
@@ -350,6 +349,8 @@ How to read this section:
 - [ ] CI starts MySQL Testcontainers, runs Flyway migrations, and executes integration tests
 - [ ] Retain logs/test reports on failure; do not store secrets or real data in artifacts
 
+### P1 — Core domain
+
 **TFL-4 [BE] — Sources**
 - [ ] `source` and `user_source` migrations
 - [ ] Seed 5–10 stable RSS sources, at most one feed per publisher; users select from the catalog but cannot add feeds in Lean
@@ -359,6 +360,7 @@ How to read this section:
 
 **TFL-5 [BE] — Topics & keywords**
 - [ ] `topic` and `topic_keyword` migrations
+- [ ] Create `topic_keyword.topic_id` foreign key with `ON DELETE CASCADE` in the initial migration so deleting a topic cannot leave orphan keywords
 - [ ] `TextNormalizer` (lowercase, remove diacritics, collapse whitespace) + unit tests (reused by matching)
 - [ ] Topic CRUD (verify ownership)
 - [ ] `PUT /topics/{id}/keywords` with include/exclude keywords and duplicate prevention
@@ -377,7 +379,7 @@ How to read this section:
 - [ ] Test the parser with a saved real-world RSS fixture; test URL canonicalization
 
 **TFL-7 [BE] — Persist articles & run crawls**
-- [ ] Migrate `article` and the minimal crawl state needed by TFL-21; defer `crawl_source_result` and `outbox_event`
+- [ ] Migrate `article` and the minimal crawl state needed by TFL-18; defer `crawl_source_result` and `outbox_event`
 - [ ] `crawl_run` stores `new_articles`, `failed_sources`, and bounded `error_summary` as well as status; `crawl_lock` stores only `active_run_id`, with `crawl_run.abandoned_after` as the sole deadline
 - [ ] Persist articles using unique `url_hash`; choose and document duplicate-insert handling and count only actual new rows
 - [ ] Keep global URL deduplication and one `source_id` per article; document the catalog overlap/source-attribution limit in the README/ADR rather than silently claiming all cross-source cases work
@@ -385,7 +387,7 @@ How to read this section:
 - [ ] Internal runner/CLI to test one source end-to-end
 - [ ] Integration test: two runs do not create duplicates (idempotency)
 
-### P3 — Matching, feed, read state, and API contract
+### P3 — Matching, feed, test slices, and API contract
 
 **TFL-8 [BE] — Matching rules (pure logic)**
 - [ ] Specification: at least one INCLUDE and no EXCLUDE match
@@ -393,10 +395,10 @@ How to read this section:
 - [ ] Table-driven tests (Vietnamese diacritics, short words, duplicates, exclude overrides include)
 
 **TFL-9 [BE] — Connect matching to ingestion**
-- [ ] `topic_article` migration
+- [ ] `topic_article` migration, including `topic_article.topic_id` foreign key with `ON DELETE CASCADE` from the start so TFL-5's topic deletion cannot leave orphan matches
 - [ ] Public matching service applies keyword rules to new articles for all active topics, independently of `user_source`, and idempotently writes `topic_article`; call it from ingestion
 - [ ] Implement `reconcile(topic, window)` for the last N days: compute keyword matches independently of source selection, insert missing associations, and delete only those that fail keyword rules in that window; leave `user_article_state` unchanged
-- [ ] Expose reconciliation for TFL-21 to call at the end of **every** crawl, including URLs already stored; TFL-20 calls the same function after keyword changes
+- [ ] Expose reconciliation for TFL-18 to call at the end of **every** crawl, including URLs already stored; TFL-17 calls the same function after keyword changes
 - [ ] End-to-end integration test: crawl a fixture and verify the article appears in the correct topic
 - [ ] ADR: explain fan-out into `topic_article` for cheap feed reads, retaining associations across source deselection, filtering against `user_source` at read time, write amplification, catalog overlap/source attribution, and the N-day reconciliation limit
 
@@ -406,37 +408,52 @@ How to read this section:
 - [ ] Filter by the owner's current `user_source` selection at read time so deselected sources disappear without deleting shared articles; cover this in the feed query and ADR from TFL-9
 - [ ] `PUT/DELETE /articles/{id}/read`
 - [ ] `POST /topics/{id}/read-all`
-- [ ] Check `EXPLAIN` and add necessary indexes; TFL-37 measures the resulting query shape
+- [ ] Check `EXPLAIN` and add necessary indexes; TFL-11 measures the resulting query shape
 - [ ] Treat `(topic_id, article_id DESC)` as an index candidate; validate ordering and additional predicates against actual queries with `EXPLAIN`
 - [ ] Test pagination for gaps/duplicates when new articles arrive
 - [ ] Update Swagger annotations for feed/read endpoints
 
-**TFL-11 [BE] — Export the OpenAPI JSON contract** *(M1: feed API and JSON contract are ready; frontend can start)*
-- [ ] Review APIs from auth through feed: requests/responses, JWT bearer auth, pagination, Problem Details, and error responses
-- [ ] Export a stable `docs/openapi.json` using a repeatable task/script; update it in the same PR whenever the API contract changes
-- [ ] CI generates the spec and verifies it matches the committed file
-- [ ] Ensure the spec has clear names/types for clean TypeScript and Dart client generation
-- [ ] Keep Swagger UI in local/dev; disable or protect it in production
-
-**TFL-37 [BE] — Measure and fix feed N+1 (Lean core; after TFL-10)**
+**TFL-11 [BE] — Measure and fix feed N+1 (Lean core; after TFL-10)**
 - [ ] Seed representative topics, articles, source selections, and read states; measure SQL count for a feed page with Hibernate statistics or SQL capture
 - [ ] Fix N+1 using a DTO/projection or a bounded fetch plan; explain why collection `join fetch` with pagination may be unsafe
 - [ ] Verify cursor order, ownership, `isRead`, and page-size-independent query count with an integration test; inspect the actual SQL and `EXPLAIN`
 - [ ] Document transaction boundaries, `@Transactional`, lazy/eager fetch choices, and the observed before/after measurements
 
-**TFL-38 [BE] — Focused test slices (Lean core; after TFL-37)**
+**TFL-12 [BE] — Focused test slices (Lean core; after TFL-11)**
 - [ ] Add `@DataJpaTest` cases for feed query, ownership/selection joins, and unique URL constraint against the intended MySQL/Testcontainers setup
 - [ ] Add `@WebMvcTest` + MockMvc cases for validation, unauthorized/forbidden access, and Problem Details; keep pure matching/`TextNormalizer` as unit tests
 - [ ] Keep a few full integration tests for RSS → article → matching → feed and repeat-crawl idempotency; document the purpose of each test layer
 
-**TFL-20 [BE] — Reconcile after keyword changes & source visibility**
+**TFL-13 [BE] — Export the OpenAPI JSON contract** *(M1: feed API and JSON contract are ready; frontend can start)*
+- [ ] Review APIs from auth through feed: requests/responses, JWT bearer auth, pagination, Problem Details, and error responses
+- [ ] Export a stable `docs/openapi.json` using a repeatable task/script; update it in the same PR whenever the API contract changes
+- [ ] Treat this as the first usable contract, not a freeze: TFL-18 and TFL-20 update the spec with their endpoints before TFL-23 and TFL-21 integrate them
+- [ ] CI generates the spec and verifies it matches the committed file
+- [ ] Ensure the spec has clear names/types for clean TypeScript and Dart client generation
+- [ ] Keep Swagger UI in local/dev; disable or protect it in production
+
+### P4 — React foundation (after TFL-13)
+
+**TFL-14 [FE] — Scaffold**
+- [ ] Vite + React + TypeScript, lint/formatting, and CI build
+- [ ] Generate a TypeScript client from `openapi.json`
+- [ ] Environment configuration (API URL) and mobile-first layout
+
+**TFL-15 [FE] — Auth**
+- [ ] Login/registration screens
+- [ ] Store tokens, refresh automatically, and guard routes
+
+**TFL-16 [FE] — Source selection**
+- [ ] Source list with select/deselect controls
+
+### P5 — Backend completion
+
+**TFL-17 [BE] — Reconcile after keyword changes & source visibility**
 - [ ] Call TFL-9's `reconcile(topic, window)` when keywords change; source selection only changes feed visibility, while the next crawl ingests a source that no user had previously selected
 - [ ] Tests: adding a keyword surfaces an article within N days; removing an INCLUDE or adding an EXCLUDE removes a now-invalid association; deselecting hides an article while retaining its association and re-selecting shows it without a new crawl; an article older than N days remains unchanged
 - [ ] Bound the days/rows processed (initial N = 30 by `article.created_at`), do not recreate associations for deleted topics, and state in README/ADR that new EXCLUDE rules do not affect older matches
 
-### P4 — Triggers and deployment
-
-**TFL-21 [BE] — Crawl triggers**
+**TFL-18 [BE] — Crawl triggers**
 - [ ] Trigger creates a `crawl_run`, atomically claims the one active slot, and returns `202` + `runId`; define existing-run/`409` behavior
 - [ ] In-process background worker runs with a deadline; do not hold a transaction/row lock during network fetches
 - [ ] Invoke TFL-9's `reconcile(topic, window)` at the end of every run; use the outcome rules in section 2.2
@@ -446,38 +463,61 @@ How to read this section:
 - [ ] Test duplicate requests, abandoned-run takeover, repeated/concurrent deduplication, partial source failure, and a simulated crash after article insert but before matching followed by a repair run
 - [ ] Measure reconciliation time and SQL/query volume for representative numbers of topics, articles in the 30-day window, and keywords; record the demo-scale result
 
-**TFL-22 [BE] — Deploy the backend**
+**TFL-19 [BE] — Deploy the backend**
 - [ ] Multi-stage Dockerfile and health check
 - [ ] `prod` configuration; secrets from environment variables
 - [ ] Choose an external MySQL host and configure a secure connection
 - [ ] Deploy to Render
 - [ ] Daily GitHub Actions `schedule` calls the internal endpoint using a secret stored in Actions Secrets; support manual workflow runs
 - [ ] Workflow polls the status endpoint until terminal status/timeout; report an incomplete run rather than claiming durable completion
-- [ ] The app’s “Crawl now” button calls the user-authenticated endpoint, polls status, and is rate-limited
+- [ ] Expose and document the user-authenticated crawl endpoint for the later TFL-23 button; keep user-trigger rate limiting in TFL-18
 - [ ] Structured logs and a correlation ID for each crawl run
 - [ ] Monitor workspace instance hours and bandwidth; daily scheduling is a starting point, not a guarantee that other workspace traffic will stay within the free allowance
 - [ ] Document deployment and local demo/video fallback in the README; verify current host pricing, free-tier behavior, and scheduler limits at deployment time
 
-**TFL-23 [BE] — Delete topics and articles within topics**
+**TFL-20 [BE] — Delete topics and articles within topics**
 - [ ] Lean: delete an owned topic and its private keywords/associations; leave shared article metadata and other users' topics intact
-- [ ] Give `topic_article.topic_id` a foreign key with `ON DELETE CASCADE` (or an equivalent transactional safeguard); reconciliation must skip a topic deleted during its run and never leave orphan associations
+- [ ] Verify the cascade foreign keys introduced in TFL-5 and TFL-9; reconciliation must skip a topic deleted during its run and never leave orphan associations
 - [ ] Feeds and reconciliation must not show or recreate associations for a deleted topic
 - [ ] Test ownership, cascade/transaction behavior, shared article preservation, and the delete-topic versus reconciliation race
 - [ ] Keep per-article hide/delete, soft-delete, independent trash/restore, tombstone `dismissed_at`, and 30-day purge in section 13 as an explicit extension
 
-### P5 — Crawler hardening **(after the Lean core demo)**
+### P6 — React completion
 
-**TFL-24 [BE] — Refactor Strategy/Template (no behavior change)** **(CV)**
-- [ ] Registry selects a parser by `source.type` (Strategy + Factory)
-- [ ] Template Method for the fetch → parse → map flow
-- [ ] Model `CrawlResult` as a sealed interface + `switch` pattern matching
-- [ ] Existing tests continue to pass unchanged
-- [ ] ADR explains the rationale
+**TFL-21 [FE] — Topics & keywords**
+- [ ] List, create, and edit topics; manage include/exclude keywords
+- [ ] Delete an owned topic with confirmation; trash/restore UI is an extension
+- [ ] Integrate the Lean TFL-20 API; update the generated client after the backend OpenAPI contract is merged
 
-**TFL-25 [BE] — Fetch resilience** **(CV)**
-- [ ] Decorators for retries (backoff), per-domain rate limits, and robots.txt checks
-- [ ] Add `source.consecutive_failures` and `source.last_crawled_at` in this story's migration; temporarily disable repeatedly failing sources
-- [ ] Test each decorator (simulate errors/timeouts)
+**TFL-22 [FE] — Feed & read state**
+- [ ] Topic feed with cursor-based infinite scrolling
+- [ ] Open article links in a browser; mark read/unread; mark all as read
+- [ ] Per-article trash/restore and dismissal UI is an extension; keep the Lean feed focused on read state
+- [ ] Filter to unread articles only
+
+**TFL-23 [FE] — States & user experience**
+- [ ] Loading/error/empty states on every screen
+- [ ] “Crawl now” button calls the user-authenticated TFL-18 endpoint, shows crawl status, and polls by `runId`
+- [ ] Waiting screen while the backend cold-starts; use measured host behavior rather than a guaranteed delay
+- [ ] Check responsive layout on narrow screens
+
+**TFL-24 [FE] — Deploy the frontend**
+- [ ] Build static assets and deploy to static hosting
+- [ ] Open a separate `topicflow-backend` PR to allow the deployed frontend origin in CORS; merge and deploy it before verifying the public frontend
+- [ ] Open the `topicflow-frontend` deployment PR and verify API requests from the deployed domain
+
+### P7 — Documentation and demo
+
+**TFL-25 [BE] — Documentation & quality** *(Lean core: demonstrable portfolio package)*
+- [ ] README: goals, local setup, deployment, sample account/data, API link, AI-assisted frontend ownership, and known limits (N-day keyword changes and overlapping catalog URLs)
+- [ ] Architecture and crawl-flow diagrams; short video/GIF and live link or local demo fallback
+- [ ] 2–3 short ADRs, including ADR-001's module/read-model boundary and TFL-9's fan-out/read-filter, association retention on source deselection, catalog overlap, and N-day reconciliation decisions
+- [ ] CI badge and test-coverage report **(CV)**
+- [ ] Clean up code/naming and resolve TODOs or create tickets for them
+
+### P8 — Optional highlight and extensions
+
+#### Lean highlight (after the demo)
 
 **TFL-26 [BE] — Parallel crawling with virtual threads** **(Lean highlight; optional after core)**
 - [ ] Virtual-thread executor + per-domain `Semaphore`
@@ -485,85 +525,58 @@ How to read this section:
 - [ ] Benchmark N sources: platform threads vs. virtual threads; record results in `docs/`
 - [ ] ADR
 
-**TFL-27 [BE] — HTML parser (Jsoup)** **(CV)**
+#### Other CV-grade work
+
+**TFL-27 [BE] — Refactor Strategy/Template (no behavior change)** **(CV)**
+- [ ] Registry selects a parser by `source.type` (Strategy + Factory)
+- [ ] Template Method for the fetch → parse → map flow
+- [ ] Model `CrawlResult` as a sealed interface + `switch` pattern matching
+- [ ] Existing tests continue to pass unchanged
+- [ ] ADR explains the rationale
+
+**TFL-28 [BE] — Fetch resilience** **(CV)**
+- [ ] Decorators for retries (backoff), per-domain rate limits, and robots.txt checks
+- [ ] Add `source.consecutive_failures` and `source.last_crawled_at` in this story's migration; temporarily disable repeatedly failing sources
+- [ ] Test each decorator (simulate errors/timeouts)
+
+**TFL-29 [BE] — HTML parser (Jsoup)** **(CV)**
 - [ ] Configure `HtmlParser` selectors via `parser_config` for 1–2 sources
 - [ ] Real-world HTML fixtures and parser tests
 - [ ] Document the risk of parsers breaking when a source changes its structure
 
-### P6 — Polish **(core documentation; other work after the Lean demo)**
-
-**TFL-28 [BE] — Documentation & quality** *(Lean core: demonstrable portfolio package)*
-- [ ] README: goals, local setup, deployment, sample account/data, API link, AI-assisted frontend ownership, and known limits (N-day keyword changes and overlapping catalog URLs)
-- [ ] Architecture and crawl-flow diagrams; short video/GIF and live link or local demo fallback
-- [ ] 2–3 short ADRs, including ADR-001's module/read-model boundary and TFL-9's fan-out/read-filter, association retention on source deselection, catalog overlap, and N-day reconciliation decisions
-- [ ] CI badge and test-coverage report **(CV)**
-- [ ] Clean up code/naming and resolve TODOs or create tickets for them
-
-**TFL-33 [BE] — Crawl observability** **(CV; after M3)**
+**TFL-30 [BE] — Crawl observability** **(CV; after M3)**
 - [ ] Micrometer + Actuator metrics for crawl duration, source success/failure, new articles, retries, and active/queued runs; avoid high-cardinality labels such as URL or user ID
 - [ ] Minimal Grafana dashboard and alerts for repeated crawl failures or missed scheduled runs
 - [ ] Document metric meaning, dashboard setup, and alert thresholds
 
-**TFL-34 [BE] — Feed load test** **(CV; after M3)**
+**TFL-31 [BE] — Feed load test** **(CV; after M3)**
 - [ ] Generate a reproducible synthetic dataset representing documented topic/article/read-state volumes
 - [ ] Use k6 to exercise feed pagination and read filters; record p50/p95/p99 latency and test environment
 - [ ] Use the measurements to validate read-heavy assumptions and revisit indexes only when the evidence supports a change
 
-**TFL-35 [BE] — Near-duplicate article detection** **(CV; after observability)**
+**TFL-32 [BE] — Near-duplicate article detection** **(CV; after observability)**
 - [ ] Calculate SimHash fingerprints from normalized titles/snippets while preserving each publisher article and URL
 - [ ] Generate candidate groups without automatically hiding or merging articles initially
 - [ ] Evaluate precision/recall on a labeled sample before enabling automatic grouping
 
-**TFL-36 [BE] — Extract crawl worker and queue** **(CV; only after measured need)**
+**TFL-33 [BE] — Extract crawl worker and queue** **(CV; only after measured need)**
 - [ ] Record the operational/load reason for extraction and compare it with the in-process durable runner
 - [ ] Add a queue, retry policy, dead-letter handling, idempotent consumers, and worker metrics
 - [ ] Keep source fetches, database transactions, and event delivery independently observable
 
-### P7 — React SPA/PWA frontend (`topicflow-frontend`; minimal SPA in Lean)
-
-**TFL-12 [FE] — Scaffold**
-- [ ] Vite + React + TypeScript, lint/formatting, and CI build
-- [ ] Generate a TypeScript client from `openapi.json`
-- [ ] Environment configuration (API URL) and mobile-first layout
-
-**TFL-13 [FE] — Auth**
-- [ ] Login/registration screens
-- [ ] Store tokens, refresh automatically, and guard routes
-
-**TFL-14 [FE] — Source selection**
-- [ ] Source list with select/deselect controls
-
-**TFL-15 [FE] — Topics & keywords**
-- [ ] List, create, and edit topics; manage include/exclude keywords
-- [ ] Delete an owned topic with confirmation; trash/restore UI is an extension
-- [ ] Integrate the Lean TFL-23 API; update the generated client after the backend OpenAPI contract is merged
-
-**TFL-16 [FE] — Feed & read state**
-- [ ] Topic feed with cursor-based infinite scrolling
-- [ ] Open article links in a browser; mark read/unread; mark all as read
-- [ ] Per-article trash/restore and dismissal UI is an extension; keep the Lean feed focused on read state
-- [ ] Filter to unread articles only
-
-**TFL-17 [FE] — States & user experience**
-- [ ] Loading/error/empty states on every screen
-- [ ] “Crawl now” button, crawl status, and polling by `runId` (depends on TFL-21 API)
-- [ ] Waiting screen while the backend cold-starts; use measured host behavior rather than a guaranteed delay
-- [ ] Check responsive layout on narrow screens
-
-**TFL-18 [FE] — Deploy the frontend**
-- [ ] Build static assets and deploy to static hosting
-- [ ] Configure backend CORS for the deployed domain
-
-**TFL-19 [FE] — PWA** **(CV; optional)**
+**TFL-34 [FE] — PWA** **(CV; optional)**
 - [ ] Manifest + service worker; “add to home screen” support
 - [ ] Add demo screenshots/GIF to the README
 
-### P8 — Flutter (`topicflow-mobile`, optional after frontend/backend)
+#### Flutter and push (optional; after the chosen extensions)
 
-**TFL-29 [Mobile] — Scaffold**: Flutter project, CI, and Dart client generated from `openapi.json`.
-**TFL-30 [Mobile] — Auth**: login/registration, secure token storage, and automatic refresh.
-**TFL-31 [Mobile] — Sources & topics**: select sources, topics, and keywords.
-**TFL-32 [Mobile] — Feed & read state**: cursor-based feed, open links, mark read/unread.
+**TFL-35 [Mobile] — Scaffold**: Flutter project, CI, and Dart client generated from `openapi.json`.
+
+**TFL-36 [Mobile] — Auth**: login/registration, secure token storage, and automatic refresh.
+
+**TFL-37 [Mobile] — Sources & topics**: select sources, topics, and keywords.
+
+**TFL-38 [Mobile] — Feed & read state**: cursor-based feed, open links, mark read/unread.
 **Push (paired PRs, in order)**:
 - [ ] `topicflow-backend`: `device_token` table, token registration API, and FCM delivery for new topic matches *(merge + deploy first)*
 - [ ] `topicflow-mobile`: register tokens, receive notifications, and open articles from them
@@ -573,20 +586,20 @@ How to read this section:
 
 ## 9. Branch and PR rules
 
-1. **One Jira story = one PR / one independently mergeable slice.** `main` must always build and run.
+1. **One Jira story normally maps to one PR / one independently mergeable slice.** A cross-repository story such as TFL-24 uses one linked PR per repository; merge the backend CORS PR before verifying the frontend deployment. `main` must always build and run.
 2. Keep these changes in the **same PR**:
    - migration + entity/repository for that table;
    - endpoint + validation + tests + OpenAPI updates;
    - architecture decision + its ADR;
    - utilities used only by that slice (e.g. `TextNormalizer` with the keyword PR).
 3. **Use separate PRs for:**
-   - behavior-preserving refactors (TFL-24), separate from new features;
+   - behavior-preserving refactors (TFL-27), separate from new features;
    - pure logic (parsing, matching rules) separate from persistence/wiring when substantial;
    - infrastructure (CI, Docker, deployment, cron) separate from business logic;
    - separate repositories use separate PRs.
 4. **Size:** target 3–8 hours of work and fewer than ~400–500 changed lines (excluding generated files, seeds, and fixtures). Split larger changes along *pure logic → persistence → API* boundaries.
 5. **Cross-repository contract:** merge the backend PR and update `openapi.json` **first**; frontend/mobile then regenerate their clients in their own PRs. Do not change the API and its client in the same PR when repositories are separate.
-6. **Jira:** each `TFL-n` heading is a story; do not zero-pad the numeric ID. Use the same key in the PR title and link the story. Checkboxes are subtasks. Close the story when the PR is merged and meets the Definition of Done.
+6. **Jira:** each `TFL-n` heading is a story; do not zero-pad the numeric ID. Use the same key in each PR title and link the story. Checkboxes are subtasks. Close the story when all its PRs are merged and meet the Definition of Done.
 7. **Definition of Done for each PR:**
    - [ ] Build and tests pass in CI
    - [ ] Migration runs against an empty database
@@ -622,7 +635,7 @@ How to read this section:
 | Copyright/legal issues                      | Store metadata and original links only; respect robots.txt and rate limits                                                                |
 | Incorrect matches (short words, Vietnamese) | Use word-boundary matching and table-driven tests                                                                                         |
 | Scope creep                                 | Keep an out-of-MVP list; add items only after the vertical slice works                                                                    |
-| Frontend drifts from the API                | Configure Swagger UI in TFL-1 and update it with each endpoint; finalize/version the JSON in TFL-11 before generating the frontend client |
+| Frontend drifts from the API                | Configure Swagger UI in TFL-1 and update it with each endpoint; finalize/version the JSON in TFL-13 before generating the frontend client |
 | PRs are too large to review                 | Apply size guidelines and split along pure logic/persistence/API boundaries                                                               |
 | Background crawl is interrupted             | Show failed/abandoned status; rerun idempotently on the next trigger and repair matches with bounded backfill                             |
 | Lean exceeds its time budget                | Protect JPA, test slices, README, and demo; defer the virtual-thread highlight and section 13 extensions                                  |
@@ -631,14 +644,14 @@ How to read this section:
 
 ## 12. Milestones
 
-| Milestone | Outcome               | Completion criteria                                                                                                                                      |
-|-----------|-----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| M1        | API contract ready    | Complete TFL-1…TFL-11 plus TFL-37/38; RSS → matching → feed works, N+1 is measured/fixed, focused tests pass, and `docs/openapi.json` generates a client |
-| M2        | Lean backend complete | Complete bounded TFL-20, simplified TFL-21/23, and core TFL-28; reruns do not duplicate articles and the run-status contract is honest                   |
-| M3        | Running in the cloud  | Complete TFL-22; verify scheduled and user-triggered crawls, observe failures, and document local/video fallback; no restart-recovery guarantee          |
-| M4        | React frontend demo   | Complete minimal TFL-12…TFL-18; auth, sources, topics, feed, read state, and Crawl now work on a phone; no trash/PWA requirement                         |
-| M5        | Résumé package        | Finish README, video/GIF, 2–3 ADRs, and interview explanations; optionally complete TFL-26 benchmark as the single technical highlight                   |
-| M6        | Optional extensions   | Select P5/P6/section 13 work by learning value; Flutter TFL-29…32 and push notifications remain optional                                                 |
+| Milestone | Outcome               | Completion criteria                                                                                                                               |
+|-----------|-----------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| M1        | API contract ready    | Complete TFL-1…TFL-13; RSS → matching → feed works, N+1 is measured/fixed, focused tests pass, and `docs/openapi.json` generates a client         |
+| M2        | Lean backend complete | Complete TFL-17…TFL-20; reruns do not duplicate articles and the run-status contract is honest                                                    |
+| M3        | Running in the cloud  | Verify the deployed system: scheduled and user-triggered crawls, failure reporting, and local/video fallback; document the restart-recovery limit |
+| M4        | React frontend demo   | Complete minimal TFL-14…16 and TFL-21…24; auth, sources, topics, feed, read state, and Crawl now work on a phone; no trash/PWA requirement        |
+| M5        | Résumé package        | Complete TFL-25: README, video/GIF, 2–3 ADRs, and interview explanations; optionally complete TFL-26 benchmark as the single technical highlight  |
+| M6        | Optional extensions   | Select optional TFL-27…38 and section 13 work by learning value; Flutter TFL-35…38 and push notifications remain optional                         |
 
 ## 13. Post-MVP backlog (ranked by résumé value per effort)
 
@@ -667,12 +680,12 @@ This is also the **knowledge index** for deliberate deferrals. Keep the exact te
 ### 13.2 Java, Spring, security, and data learning index
 
 - **JPA/Hibernate:** after the Lean N+1 and fetch strategy work, study entity graphs, projections, batch fetching, lazy/eager loading, dirty checking, `@Version` (optimistic lock), pessimistic locks, transaction propagation/isolation, and `@Transactional` boundaries. Add `@Version` only to a real conflicting update and test the race. Keep `@DataJpaTest`, Testcontainers, SQL capture, and `EXPLAIN` as the evidence tools.
-- **Spring internals:** AOP/custom aspect, proxy/self-invocation behavior, bean lifecycle, custom starter/autoconfiguration (autoconfiguration), application events, and `@TransactionalEventListener`. Prefer a small experiment or ADR before introducing a custom starter into the product.
+- **Spring internals:** AOP/custom aspect, proxy/self-invocation behavior, bean lifecycle, custom starter/auto-configuration, application events, and `@TransactionalEventListener`. Prefer a small experiment or ADR before introducing a custom starter into the product.
 - **Security:** current ownership checks across users are authorization. Add ADMIN source-catalog management only if there is a real admin workflow; then test RBAC and `@PreAuthorize`. OAuth2/OIDC, third-party login, token rotation, and more advanced rate limiting are separate extensions.
 - **Concurrency beyond virtual threads:** `CompletableFuture`, Java locks, `ConcurrentHashMap`, `Semaphore`, thread-pool sizing/tuning, cancellation, timeouts, and race tests. Compare these tools with the actual I/O-bound RSS workload before changing the runner.
 - **JVM:** GC, heap and RSS memory, profiling with JFR (Java Flight Recorder), thread dumps, allocation profiles, and latency measurements. Record workload and environment alongside any benchmark.
 - **Integration options:** caching/Redis, Kafka/RabbitMQ messaging, `@Scheduled`/`@Async`, Spring Retry/Resilience4j versus the handwritten `Fetcher` decorator, `WebClient`/`RestClient`, and WebSocket/SSE status updates. Introduce each only when a measured bottleneck or user-facing need justifies it.
-- **Test slices:** `@DataJpaTest`, `@WebMvcTest`, MockMvc, pure unit tests, and full Testcontainers integration tests remain distinct tools; TFL-38 covers the minimum, while further edge cases and mutation/load testing are optional.
+- **Test slices:** `@DataJpaTest`, `@WebMvcTest`, MockMvc, pure unit tests, and full Testcontainers integration tests remain distinct tools; TFL-12 covers the minimum, while further edge cases and mutation/load testing are optional.
 - **Global feed:** `GET /feed?cursor=&limit=` across all topics remains an optional API extension; Lean includes only the per-topic feed in TFL-10.
 
 ---
@@ -683,9 +696,9 @@ Fold each item into its story's checklist when that story starts; delete this se
 
 - **TFL-10 — hidden articles and read state:**
   - [ ] `POST /topics/{id}/read-all` and any unread count use the same `user_source` filter as the feed, so articles hidden by a deselected source are not marked read. Test: deselect a source, call read-all, reselect, and verify its articles are still unread.
-- **TFL-9 / TFL-20 — reconcile transaction scope:**
+- **TFL-9 / TFL-17 — reconcile transaction scope:**
   - [ ] Run `reconcile(topic, window)` in one transaction per topic. A topic deleted mid-run (foreign-key violation) is skipped and noted in `error_summary` without aborting other topics; do not reuse a JPA session after such an exception.
-- **TFL-21 — stale worker cooperation:**
+- **TFL-18 — stale worker cooperation:**
   - [ ] Before each source and before reconciliation, check that the worker's own run is still `RUNNING`; if not, exit early. The conditional finalize update remains the final safeguard. Test: takeover while a slow worker is mid-run.
-- **TFL-14 / TFL-17 — newly selected sources:**
+- **TFL-16 / TFL-23 — newly selected sources:**
   - [ ] A source no user had selected before has no articles until the next crawl; after selecting one, prompt the user to use "Crawl now", or document the delay in the README.
