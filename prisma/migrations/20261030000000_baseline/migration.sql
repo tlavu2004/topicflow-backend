@@ -1,0 +1,2 @@
+-- TFL-1 baseline: no application tables yet.
+-- TFL-2 adds the first domain model and its migration.
