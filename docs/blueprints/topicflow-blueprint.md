@@ -95,9 +95,9 @@ flowchart TB
 TypeScript root: `src/`, with one Nest module per domain (`identity`, `source`, `topic`, `crawler`, `article`, `matching`) and shared infrastructure kept outside domain modules.
 
 ### 2.1 Module boundaries
-- Each module owns writes to its tables and exposes application services for business operations. The `article` feed read model may use read-only SQL joins across `topic`, `article`, and `user_source`; document that exception in ADR-001. Dependency rules check TypeScript imports and Nest module exports, not SQL joins.
+- Each module owns writes to its tables and exposes application services for business operations. This is a code convention with one shared `PrismaClient`: only a module's repository classes inject `PrismaService` to write its tables; controllers/application services call those repositories or exported application services. The `article` feed read model may use read-only SQL joins across `topic`, `article`, and `user_source`; document that exception in ADR-001. Import rules check TypeScript dependencies, not SQL joins.
 - `crawler` calls the public `matching` application service after persisting new articles. An `ArticlesIngested` event is a later decoupling option; an in-process Nest event emitter does not provide durable delivery.
-- Keep Nest module exports narrow. Add a small import-boundary check if it protects a real boundary; keep the checks proportional to the codebase.
+- Keep Nest module exports narrow. From TFL-2's first repository, add a scoped ESLint `no-restricted-imports` rule for controllers and application services so they cannot import `PrismaService`/generated Prisma Client directly; database infrastructure, repositories, and tests are exceptions. Review write ownership separately because static import rules cannot prove which table a query changes.
 
 ### 2.1.1 Architecture style by module
 - Keep the overall application a modular monolith; choose the internal style based on each module's complexity, not for uniformity.
@@ -110,7 +110,7 @@ TypeScript root: `src/`, with one Nest module per domain (`identity`, `source`, 
 ### 2.2 Crawl flow
 1. GitHub Actions or a user calls the trigger. Atomically allow one active `crawl_run` system-wide; return `202` with its `runId`, or return the existing run/`409` according to the API contract. `202` means accepted, not completed.
 2. An in-process async runner gets the active sources selected by at least one user. Bound its execution time and expose a status endpoint. The trigger must not hold a database transaction or row lock during network fetches. Keep CPU-heavy parsing off the event loop if measurement shows a problem.
-3. For each source, fetch and parse RSS, canonicalize URLs, calculate `url_hash`, insert only new articles with PostgreSQL conflict handling, and match them against active topics regardless of each user's current source selection. The feed applies source selection at read time. Count `new_articles` from rows actually inserted; count failed sources and retain a bounded `error_summary`. A failed source must not discard earlier successes.
+3. For each source, fetch and parse RSS, decode entities and strip markup from title/description into plain text before matching, validate HTTP(S) links, canonicalize article URLs, calculate `url_hash`, insert only new articles with PostgreSQL conflict handling, and match them against active topics regardless of each user's current source selection. The feed applies source selection at read time. Count `new_articles` from rows actually inserted; count failed sources and retain a bounded `error_summary`. A failed source must not discard earlier successes.
 4. At the end of **every** run, call `reconcile(topic, window)` for the last N days (initial choice: 30, measured by `article.created_at`): compute desired matches from all stored articles in the window regardless of source selection, insert missing `topic_article` associations, and delete associations in that window only when keyword rules no longer match. Deselecting a source retains its associations; selecting it again reveals them through the feed filter. Include URLs already stored before this run. Using ingestion time lets the next run repair a recently stored article even if its publisher date is old or missing. Leave `user_article_state` untouched.
 5. GitHub Actions and the frontend poll by `runId` until terminal status or timeout. The next trigger can mark an abandoned active run failed after a documented timeout and start a fresh run. Unique URL constraints and idempotent topic-article writes make reruns safe; Lean does not resume an interrupted source from a checkpoint.
 6. Mark the run `SUCCESS` when all sources and reconciliation succeed, `PARTIAL` when useful source work succeeds but a source or reconciliation fails, or `FAILED` when no source succeeds. With no eligible sources, succeed with zero counts only if reconciliation succeeds. The status endpoint returns `new_articles`, `failed_sources`, and `error_summary` with that state. Record useful logs with the run ID. A worker finalizes only its own RUNNING row and releases the lock only if `active_run_id` still equals its run ID; a stale worker cannot overwrite a newer run.
@@ -120,7 +120,7 @@ Lean guarantees URL-level deduplication and one active crawl under normal operat
 ### 2.3 Matching rules
 - Normalize by lowercasing, removing Vietnamese diacritics, and collapsing whitespace. Match against `title + snippet`.
 - An article matches a topic if **at least one INCLUDE** keyword matches and **no EXCLUDE** keyword matches.
-- Match on **word boundaries** (so “ai” does not incorrectly match “mail”); multi-word keywords match as phrases.
+- Match on **word boundaries** (so “ai” does not incorrectly match “mail” but does match the later standalone “ai” in “mail ai”); multi-word keywords match as phrases.
 - When a user changes keywords, call `reconcile(topic, window)` over the last N days. Source selection does not delete `topic_article` associations: deselecting hides articles through the feed's `user_source` filter, while selecting again reveals retained matches without another crawl. Matches older than N days remain unchanged, including those that would fail newly added EXCLUDE rules.
 
 ---
@@ -157,6 +157,7 @@ CREATE TABLE topic (
   id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
   user_id BIGINT NOT NULL,
   name VARCHAR(120) NOT NULL,
+  keywords_version INT NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX idx_topic_user ON topic (user_id);
@@ -221,11 +222,11 @@ CREATE TABLE crawl_lock (
 ```
 
 Notes:
-- Store timestamps in UTC as PostgreSQL `TIMESTAMPTZ`. Since Prisma maps `BIGINT` IDs to JavaScript `bigint`, serialize IDs/cursors as decimal strings in JSON and OpenAPI (or make one documented ID-type change before TFL-2); never pass raw `bigint` to `JSON.stringify`.
+- Store timestamps in UTC as PostgreSQL `TIMESTAMPTZ`. Keep `BIGINT` IDs deliberately to learn the PostgreSQL/JavaScript boundary: Prisma maps them to JavaScript `bigint`, so serialize IDs and the article-ID cursor as decimal strings in JSON/OpenAPI. Reuse TFL-1's parse/serialize helpers and never pass raw `bigint` to `JSON.stringify`; TFL-2 and TFL-10 test their DTO boundaries.
 - Canonical URLs: remove tracking parameters (`utm_*`, `fbclid`, etc.) and fragments, and normalize the scheme/host.
 - Lean deletes a topic and its private keywords/associations; shared `article` metadata remains and active articles have no age-based retention limit. No per-article trash, restore, tombstone, or 30-day purge is promised. See section 13 for independent `topic.deleted_at` / `topic_article.deleted_at` lifecycles and `dismissed_at`.
 - `crawl_run` holds status, result totals, a bounded error summary, and the sole `abandoned_after` deadline; `crawl_lock` stores only `active_run_id` to serialize claims. See section 2.2 for takeover semantics.
-- The database unique constraint on `article.url_hash` is global and authoritative. Lean controls the catalog: seed at most one RSS feed per publisher and do not allow user-added sources. Overlapping URLs across catalog feeds can still be attributed only to the first stored `source_id`, so filtering by selected source may hide an otherwise relevant article; record this accepted limitation in the README/ADR. Use `INSERT ... ON CONFLICT (url_hash) DO NOTHING RETURNING id` where the inserted row ID/count is needed; count `new_articles` only from inserted rows and test concurrent/repeated insertion. Targeted conflict handling must not suppress unrelated constraint errors.
+- The database unique constraint on `article.url_hash` is global and authoritative. Lean controls the catalog: seed at most one RSS feed per publisher and do not allow user-added sources. Overlapping URLs across catalog feeds can still be attributed only to the first stored `source_id`, so filtering by selected source may hide an otherwise relevant article; record this accepted limitation in the README/ADR. TFL-7 chooses and tests the insert/conflict API, counts `new_articles` only from inserted rows, and must not suppress unrelated constraint errors.
 - `reconcile(topic, window)` evaluates keyword rules independently of `user_source`; source deselection retains associations and only the feed read filter hides them. It never changes `user_article_state`. See section 2.2; durable `ArticlesIngested` delivery with a transactional outbox is an extension.
 - The Flutter phase will add a `device_token` table (`user_id`, `token`, `platform`) for push notifications.
 - Add indexes as needed based on `EXPLAIN` results.
@@ -264,6 +265,7 @@ Represent `BIGINT` IDs and cursor tokens as strings in JSON/OpenAPI; convert and
 **Backend (Render Free)**
 - A Free Web Service sleeps after 15 minutes without requests and takes about one minute to cold-start. Each workspace gets 750 free instance hours per month.
 - Free Web Services have no persistent disk and cannot run one-off jobs.
+- A Free Web Service cannot use Render's paid-only pre-deploy command; TFL-19 defines the startup migration path and must recheck current plan terms.
 - Render's free PostgreSQL database expires after 30 days and has no free-plan backups. Choose a durable PostgreSQL host or paid plan for a lasting demo; if using the free database, document reseeding/export and its expiry.
 - Strategy: use an external scheduler to wake the service (start with once daily; increase to 4–6 times per day if needed). **Do not** send continuous keep-alive pings.
 - GitHub Actions calls the endpoint daily and can also be run manually. Verify the current Render Cron price before choosing it for a zero-cost demo.
@@ -341,7 +343,8 @@ How to read this section:
 - [x] Record the Node.js/NestJS/Prisma compatibility choice in the README or a short ADR
 
 **TFL-2 [BE] — Auth & users**
-- [ ] `users` Prisma schema and migration
+- [ ] `users` Prisma schema and migration; reuse TFL-1's decimal-string `BIGINT` ID helper in request/response DTOs and test IDs beyond JavaScript's safe-integer range
+- [ ] First `identity` repository owns user-table writes and is the only identity class that injects `PrismaService`; add a scoped ESLint `no-restricted-imports` rule barring direct Prisma imports in controllers/application services, then extend it as repositories appear in other modules
 - [ ] Registration/login and password hashing (BCrypt/Argon2)
 - [ ] JWT access and refresh tokens in headers; Nest guard and ownership checks; define refresh-token storage/rotation or a documented minimal revocation limit
 - [ ] Set up a reusable PostgreSQL Testcontainers helper for later PRs
@@ -363,11 +366,11 @@ How to read this section:
 - [ ] API authorization tests and one Nest `TestingModule` + Supertest HTTP test for selected-source validation
 
 **TFL-5 [BE] — Topics & keywords**
-- [ ] `topic` and `topic_keyword` Prisma schema/migrations
+- [ ] `topic` and `topic_keyword` Prisma schema/migrations, including `topic.keywords_version INT NOT NULL DEFAULT 0`
 - [ ] Create `topic_keyword.topic_id` foreign key with `ON DELETE CASCADE` in the initial migration so deleting a topic cannot leave orphan keywords
-- [ ] `TextNormalizer` (lowercase, remove diacritics, collapse whitespace) + unit tests (reused by matching)
+- [ ] `TextNormalizer` for both RSS text and user keywords: normalize canonical Unicode forms with `NFD`, lowercase, replace `đ`/`Đ` with `d`, remove combining marks, and collapse whitespace without dropping meaningful punctuation; test composed NFC versus decomposed NFD input, upper/lowercase `Đ`/`đ`, and equivalent results
 - [ ] Topic CRUD (verify ownership)
-- [ ] `PUT /topics/{id}/keywords` with include/exclude keywords and duplicate prevention
+- [ ] `PUT /topics/{id}/keywords` with include/exclude keywords and duplicate prevention; replace the keyword set and increment `topic.keywords_version` atomically in the same transaction, including changes to an empty set
 - [ ] Per-user topic/keyword limits
 - [ ] Validation and cross-user ownership tests using Nest `TestingModule` + Supertest where suitable
 
@@ -379,13 +382,15 @@ How to read this section:
 - [ ] `Fetcher` and `SourceParser` interfaces (ports)
 - [ ] `HttpFetcher` (timeouts, User-Agent, response-size limit)
 - [ ] `RssParser` → typed `ParsedArticle` interface/value object
+- [ ] Decode RSS HTML entities (`&amp;`, `&nbsp;`) and strip HTML from title/description with a real HTML parser (discard `script`/`style` content too), yielding plain text before `TextNormalizer` or matching; normalize whitespace and truncate the resulting title to 500 and snippet to 1000 characters without splitting a Unicode code point
+- [ ] Resolve relative article/thumbnail URLs against the feed URL if supported, then accept only `http:`/`https:` via URL parsing: skip an article with an invalid/unsafe link and omit an invalid/unsafe thumbnail. Canonicalize and hash only a validated article link
 - [ ] Canonicalize URLs and calculate `url_hash`
-- [ ] Test the parser with a saved real-world RSS fixture; test URL canonicalization
+- [ ] Test the parser with a saved real-world RSS fixture plus markup/entity, NFC/NFD, overlength, and `javascript:`/`data:` URL cases; ensure markup words such as `img`/`style` cannot become matching text; test URL canonicalization
 
 **TFL-7 [BE] — Persist articles & run crawls**
 - [ ] Migrate `article` and the minimal crawl state needed by TFL-18 with Prisma Migrate; defer `crawl_source_result` and `outbox_event`
 - [ ] `crawl_run` stores `new_articles`, `failed_sources`, and bounded `error_summary` as well as status; `crawl_lock` stores only `active_run_id`, with `crawl_run.abandoned_after` as the sole deadline
-- [ ] Persist articles using unique `url_hash`; use targeted PostgreSQL `ON CONFLICT (url_hash) DO NOTHING RETURNING id` through parameterized SQL where needed and count only actual inserted rows
+- [ ] Persist articles using unique `url_hash`; first verify Prisma 7.10.1 `createManyAndReturn({ skipDuplicates: true })` on PostgreSQL, count `new_articles` from returned rows, and do not assume return order. It skips any unique conflict: use targeted parameterized PostgreSQL `ON CONFLICT (url_hash) DO NOTHING RETURNING id` if another unique constraint could be violated. Cover duplicates already in the DB and within one batch ([Prisma 7 Client reference](https://www.prisma.io/docs/orm/v7/reference/prisma-client-reference))
 - [ ] Keep global URL deduplication and one `source_id` per article; document the catalog overlap/source-attribution limit in the README/ADR rather than silently claiming all cross-source cases work
 - [ ] Orchestrator crawls selected RSS sources sequentially and records source errors and run totals
 - [ ] Internal runner/CLI to test one source end-to-end
@@ -395,13 +400,15 @@ How to read this section:
 
 **TFL-8 [BE] — Matching rules (pure logic)**
 - [ ] Specification: at least one INCLUDE and no EXCLUDE match
-- [ ] Match on word boundaries; support phrases; normalize with `TextNormalizer`
-- [ ] Table-driven tests (Vietnamese diacritics, short words, duplicates, exclude overrides include)
+- [ ] Match literal normalized keywords/phrases by iterating **every** `indexOf` occurrence, advancing past a failed boundary candidate; test neighboring Unicode letters/numbers with `\p{L}`/`\p{N}` and the `u` flag. Do not feed user input directly to `RegExp` or rely on ASCII `\b`. If regex is chosen, verify `RegExp.escape` runtime/TypeScript-lib support (or use a vetted escape helper) and use Unicode-aware lookaround with a fixed pattern to avoid regex injection/ReDoS
+- [ ] Table-driven tests (Vietnamese diacritics, short words, `mail ai` matching `ai` only at the second occurrence, duplicates, exclude overrides include, phrases, `c++`, `.net`, `covid-19`, regex metacharacters, and punctuation next to a match)
 
 **TFL-9 [BE] — Connect matching to ingestion**
 - [ ] `topic_article` Prisma schema/migration, including `topic_article.topic_id` foreign key with `ON DELETE CASCADE` from the start so TFL-5's topic deletion cannot leave orphan matches
 - [ ] Public matching service applies keyword rules to new articles for all active topics, independently of `user_source`, and idempotently writes `topic_article`; call it from ingestion
-- [ ] Implement `reconcile(topic, window)` for the last N days: compute keyword matches independently of source selection, insert missing associations, and delete only those that fail keyword rules in that window; use a short transaction per topic and leave `user_article_state` unchanged
+- [ ] Implement `reconcile(topic, window)` for the last N days: compute keyword matches independently of source selection, insert missing associations, and delete only those that fail keyword rules in that window; leave `user_article_state` unchanged. Page through the complete bounded window and write in small batches with short transactions; never silently truncate reconciliation at a row limit
+- [ ] Set explicit Prisma interactive-transaction `maxWait`/`timeout` for each bounded write batch and size the `pg` pool against the database host's connection limit. Prisma 7 defaults are `maxWait = 2 s`, `timeout = 5 s`, and the `pg` adapter pool defaults to `max = 10` per process; verify these for pinned 7.10.1 during implementation. Do no network fetch or full-window scan inside a write transaction. Measure batch duration and document retry/failure behavior ([Prisma transaction options](https://www.prisma.io/docs/orm/v7/reference/prisma-client-reference), [pool defaults](https://www.prisma.io/docs/orm/v7/prisma-client/setup-and-configuration/databases-connections/connection-pool))
+- [ ] Capture `topic.keywords_version` with the keyword snapshot at reconcile start. For **every** `topic_article` write batch (including direct matching of new articles), use a short transaction that locks the topic row with parameterized `SELECT ... FOR UPDATE`, verifies the version **inside the same transaction**, then writes. A changed version aborts that topic and restarts with fresh keywords; never commit a stale batch. Keep a bounded retry policy and surface unfinished work if keywords keep changing. Do not use a session advisory lock across Prisma pooled connections. Test an interleaved keyword update between batches: an older run cannot restore stale associations
 - [ ] Expose reconciliation for TFL-18 to call at the end of **every** crawl, including URLs already stored; TFL-17 calls the same function after keyword changes
 - [ ] End-to-end integration test: crawl a fixture and verify the article appears in the correct topic
 - [ ] ADR: explain fan-out into `topic_article` for cheap feed reads, retaining associations across source deselection, filtering against `user_source` at read time, write amplification, catalog overlap/source attribution, and the N-day reconciliation limit
@@ -455,7 +462,8 @@ How to read this section:
 **TFL-17 [BE] — Reconcile after keyword changes & source visibility**
 - [ ] Call TFL-9's `reconcile(topic, window)` when keywords change; source selection only changes feed visibility, while the next crawl ingests a source that no user had previously selected
 - [ ] Tests: adding a keyword surfaces an article within N days; removing an INCLUDE or adding an EXCLUDE removes a now-invalid association; deselecting hides an article while retaining its association and re-selecting shows it without a new crawl; an article older than N days remains unchanged
-- [ ] Bound the days/rows processed (initial N = 30 by `article.created_at`), do not recreate associations for deleted topics, and state in README/ADR that new EXCLUDE rules do not affect older matches
+- [ ] Bound reconciliation by the time window (initial N = 30 days by `article.created_at`) and page through **all** rows inside it with bounded page/batch sizes, without a silent total-row cutoff. Do not recreate associations for deleted topics; state in README/ADR that new EXCLUDE rules do not affect older matches
+- [ ] Reuse TFL-9's paged reconciliation, `keywords_version` guard, and explicit transaction limits after keyword changes; if a batch fails or an execution budget is exceeded, surface incomplete work and continue/retry rather than leaving stale associations silently
 
 **TFL-18 [BE] — Crawl triggers**
 - [ ] Trigger creates a `crawl_run`, atomically claims the one active slot in a short PostgreSQL transaction, and returns `202` + `runId`; define existing-run/`409` behavior
@@ -471,6 +479,7 @@ How to read this section:
 - [ ] Multi-stage Dockerfile and health check
 - [ ] `prod` configuration; secrets from environment variables
 - [ ] Choose a durable PostgreSQL host/plan and configure a secure connection, connection limit, migration step, and backup or reseed procedure; if using Render Free Postgres, document its 30-day expiry
+- [ ] On Render Free, use one Docker web-service instance and an entrypoint/start command that runs `prisma migrate deploy` before Nest; include the Prisma CLI in the final image, exit on migration failure, and verify repeated cold starts and a restart against an already migrated database. Keep schema changes backward-compatible with any old instance during deployment. Render's pre-deploy command is paid-only; recheck current plan terms before deployment ([Render deploy steps](https://render.com/docs/deploys))
 - [ ] Deploy to Render
 - [ ] Daily GitHub Actions `schedule` calls the internal endpoint using a secret stored in Actions Secrets; support manual workflow runs
 - [ ] Workflow polls the status endpoint until terminal status/timeout; report an incomplete run rather than claiming durable completion
@@ -495,6 +504,7 @@ How to read this section:
 
 **TFL-22 [FE] — Feed & read state**
 - [ ] Topic feed with cursor-based infinite scrolling
+- [ ] Render title and snippet as plain text nodes, never as HTML (`innerHTML`/`dangerouslySetInnerHTML`); treat RSS-derived fields as untrusted even after backend cleanup
 - [ ] Open article links in a browser; mark read/unread; mark all as read
 - [ ] Per-article trash/restore and dismissal UI is an extension; keep the Lean feed focused on read state
 - [ ] Filter to unread articles only
@@ -683,14 +693,14 @@ This is also the **knowledge index** for deliberate deferrals. Keep the exact te
 
 ### 13.2 TypeScript, NestJS, security, and data learning index
 
-- **Prisma/PostgreSQL:** after the Lean query-count work, study relation-loading strategies, selective projections, parameterized raw SQL, index selection, `EXPLAIN (ANALYZE, BUFFERS)`, transaction isolation, optimistic version columns, pessimistic row locks, and unique/conflict handling. Add a version column only for a real conflicting update and test the race. Keep PostgreSQL Testcontainers, query logging, and `EXPLAIN` as evidence tools.
+- **Prisma/PostgreSQL:** after the Lean query-count work, study relation-loading strategies, selective projections, parameterized raw SQL, index selection, `EXPLAIN (ANALYZE, BUFFERS)`, transaction isolation, optimistic version columns, pessimistic row locks, and unique/conflict handling. Lean's `topic.keywords_version` is the concrete version-column case: test keyword-update versus reconciliation races with short row-locked transactions. Keep PostgreSQL Testcontainers, query logging, and `EXPLAIN` as evidence tools.
 - **Nest internals:** dependency injection, dynamic modules, provider scopes and lifecycle hooks, guards, pipes, interceptors, exception filters, custom decorators, and in-process events. Prefer a small experiment or ADR before adding a reusable dynamic module to the product.
 - **Security:** current ownership checks across users are authorization. Add ADMIN source-catalog management only if there is a real admin workflow; then test role-based access control (RBAC) with Nest guards/decorators. OAuth2/OIDC, third-party login, refresh-token rotation, and more advanced rate limiting are separate extensions.
 - **Concurrency beyond bounded promises:** `Promise.allSettled`, `AbortController`, per-host rate limits, queue backpressure, worker threads for measured CPU-heavy parsing, cancellation, timeouts, and race tests. Compare these tools with the actual I/O-bound RSS workload before changing the runner.
 - **Node.js runtime:** event-loop delay/utilization, V8 GC, heap and RSS memory, CPU/heap profiles, allocation profiles, and latency measurements. Record workload and environment alongside any benchmark.
 - **Integration options:** caching/Redis, Kafka/RabbitMQ messaging, Nest scheduling/queues, retries and circuit breakers versus the handwritten `Fetcher` decorator, native `fetch`/HTTP clients, and WebSocket/SSE status updates. Introduce each only when a measured bottleneck or user-facing need justifies it.
 - **Test layers:** pure unit tests, Nest `TestingModule`/Supertest HTTP tests, PostgreSQL Testcontainers repository tests, and full e2e tests remain distinct tools; TFL-12 covers the minimum, while further edge cases and mutation/load testing are optional.
-- **Module boundary checks:** add a TypeScript import/Nest module-export check when the first meaningful cross-module dependency exists. TFL-1 has only empty domain modules, so ADR-001 records the rule without a vacuous automated check.
+- **Module boundary checks:** TFL-2's first repository adds a scoped ESLint `no-restricted-imports` check barring direct `PrismaService`/generated-client imports in controllers and application services; extend it to later modules. TFL-1 has only empty domain modules, so ADR-001 records the convention without a vacuous automated check.
 - **Original Java learning index:** the preserved `docs/blueprints/topicflow-blueprint-v1.md` retains every Java/Spring/JPA/JVM keyword and story for later study; this NestJS plan does not claim those skills were exercised here.
 - **Global feed:** `GET /feed?cursor=&limit=` across all topics remains an optional API extension; Lean includes only the per-topic feed in TFL-10.
 
@@ -702,8 +712,8 @@ Fold each item into its story's checklist when that story starts; delete this se
 
 - **TFL-10 — hidden articles and read state:**
   - [ ] `POST /topics/{id}/read-all` and any unread count use the same `user_source` filter as the feed, so articles hidden by a deselected source are not marked read. Test: deselect a source, call read-all, reselect, and verify its articles are still unread.
-- **TFL-9 / TFL-17 — reconcile transaction scope:**
-  - [ ] Run `reconcile(topic, window)` in one short PostgreSQL transaction per topic. If a topic is deleted mid-run and a foreign-key violation occurs, roll back that topic transaction, skip it, and note it in `error_summary` without aborting other topics; do not reuse the failed transaction client.
+- **TFL-9 / TFL-17 — topic deletion during reconcile:**
+  - [ ] If a topic is deleted mid-run and a foreign-key violation occurs, roll back that batch, skip the deleted topic, and note it in `error_summary` without aborting other topics; do not reuse the failed transaction client.
 - **TFL-18 — stale worker cooperation:**
   - [ ] Before each source and before reconciliation, check that the worker's own run is still `RUNNING`; if not, exit early. The conditional finalize update remains the final safeguard. Test: takeover while a slow worker is mid-run.
 - **TFL-16 / TFL-23 — newly selected sources:**

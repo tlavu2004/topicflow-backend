@@ -33,7 +33,7 @@ Node 24 satisfies the package engine requirements of Nest 11, Prisma 7, Jest 30,
 
 The schema currently has no application models. TFL-1 applies an empty Prisma Migrate baseline; the first table migration arrives with TFL-2 (`users`). Review the Prisma schema and SQL migration together. See [ADR-001](docs/adr/001-modular-monolith-and-data-boundaries.md) for the handwritten SQL review rule and module boundaries.
 
-`NODE_ENV=development` is the local default. Production uses `NODE_ENV=production`, `DATABASE_URL`, and optional `PORT` (default 3000); startup validates these values, and production ignores local `.env` files. Provide secrets through the deployment environment. Errors use `application/problem+json`, and DTO input is validated globally. PostgreSQL `BIGINT` IDs and the ID-based feed cursor cross the API boundary as **positive decimal strings** within the signed 64-bit range; never serialize a JavaScript `bigint` directly to JSON.
+`NODE_ENV=development` is the local default. Production uses `NODE_ENV=production`, `DATABASE_URL`, and optional `PORT` (default 3000); startup validates these values, and production ignores local `.env` files. Provide secrets through the deployment environment. Errors use `application/problem+json`, and DTO input is validated globally. PostgreSQL `BIGINT` IDs and the ID-based feed cursor deliberately remain **positive decimal strings** at the API boundary to exercise the PostgreSQL/JavaScript type boundary; reuse the TFL-1 helper and never serialize a JavaScript `bigint` directly to JSON.
 
 ## Checks
 
