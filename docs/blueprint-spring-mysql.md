@@ -91,7 +91,7 @@ flowchart TB
   Crawler -->|RSS sources| Publishers[News publishers]
 ```
 
-Java base package: `com.<yourname>.topicflow`, with one subpackage per module as shown above.
+Java base package: `com.tlavu.topicflow`, with one subpackage per module as shown above.
 
 ### 2.1 Module boundaries
 - Each module owns writes to its tables and exposes application services for business operations. The `article` feed read model may use read-only SQL joins across `topic`, `article`, and `user_source`; document that exception in ADR-001. ArchUnit checks Java package dependencies, not SQL joins.
