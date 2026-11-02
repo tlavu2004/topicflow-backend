@@ -4,7 +4,7 @@
 > - Jira key: **TFL**
 > - Repo: `topicflow-backend` (NestJS + TypeScript + PostgreSQL), `topicflow-frontend` (React SPA/PWA), `topicflow-mobile` (Flutter)
 > - The backend is intended as a hands-on architecture learning project; the frontend will be built primarily with AI-assisted coding.
-> - The original Java/Spring/MySQL plan is preserved unchanged in `docs/blueprint-spring-mysql.md`.
+> - The original Java/Spring/MySQL plan is preserved unchanged in `docs/blueprints/topicflow-blueprint-v1.md`.
 
 ---
 
@@ -691,7 +691,7 @@ This is also the **knowledge index** for deliberate deferrals. Keep the exact te
 - **Integration options:** caching/Redis, Kafka/RabbitMQ messaging, Nest scheduling/queues, retries and circuit breakers versus the handwritten `Fetcher` decorator, native `fetch`/HTTP clients, and WebSocket/SSE status updates. Introduce each only when a measured bottleneck or user-facing need justifies it.
 - **Test layers:** pure unit tests, Nest `TestingModule`/Supertest HTTP tests, PostgreSQL Testcontainers repository tests, and full e2e tests remain distinct tools; TFL-12 covers the minimum, while further edge cases and mutation/load testing are optional.
 - **Module boundary checks:** add a TypeScript import/Nest module-export check when the first meaningful cross-module dependency exists. TFL-1 has only empty domain modules, so ADR-001 records the rule without a vacuous automated check.
-- **Original Java learning index:** the preserved `docs/blueprint-spring-mysql.md` retains every Java/Spring/JPA/JVM keyword and story for later study; this NestJS plan does not claim those skills were exercised here.
+- **Original Java learning index:** the preserved `docs/blueprints/topicflow-blueprint-v1.md` retains every Java/Spring/JPA/JVM keyword and story for later study; this NestJS plan does not claim those skills were exercised here.
 - **Global feed:** `GET /feed?cursor=&limit=` across all topics remains an optional API extension; Lean includes only the per-topic feed in TFL-10.
 
 ---

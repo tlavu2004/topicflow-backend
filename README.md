@@ -1,6 +1,6 @@
 # TopicFlow backend
 
-NestJS backend for the TopicFlow RSS and topic feed app. The implementation plan is in [the current blueprint](docs/blueprint.md); the preserved Spring/MySQL plan is in [the previous blueprint](docs/blueprint-spring-mysql.md).
+NestJS backend for the TopicFlow RSS and topic feed app. The implementation plan is in [the current blueprint](docs/blueprints/topicflow-blueprint.md); the preserved Spring/MySQL plan is in [the previous blueprint](docs/blueprints/topicflow-blueprint-v1.md).
 
 ## Baseline
 
