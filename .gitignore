@@ -5,3 +5,17 @@
 # Operating system files
 .DS_Store
 Thumbs.db
+
+# Local dependencies, build output, and data
+node_modules/
+dist/
+coverage/
+.local/
+.nest-seed/
+src/generated/prisma/
+*.tsbuildinfo
+
+# Local configuration
+.env
+.env.*
+!.env.example
