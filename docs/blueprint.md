@@ -323,22 +323,22 @@ How to read this section:
 ### P0 — Foundation (topicflow-backend)
 
 **TFL-1 [BE] — Foundation + minimal CI**
-- [ ] **First:** verify compatible exact Node.js LTS, NestJS, `@nestjs/swagger`, JWT package, Prisma, PostgreSQL driver/adapter, and test-runner releases; build a minimal Swagger UI + JWT smoke test before committing to the baseline
-- [ ] Repository, `.gitignore`, license, and README skeleton
-- [ ] Verify exact versions of Nest core/platform, TypeScript, Prisma Client/Migrate, `@nestjs/swagger`, JWT package, test runner, Testcontainers, CI Node version, Docker base image, and deployment runtime
-- [ ] Choose one package manager/lockfile and strict TypeScript settings; record any compatibility fallback in an ADR
-- [ ] Nest CLI scaffold and domain-module folder structure
-- [ ] Docker Compose for local PostgreSQL
-- [ ] Prisma schema and initial Prisma Migrate baseline; establish how handwritten SQL migrations are reviewed
-- [ ] `local` / `prod` environment configuration with runtime validation and no committed secrets
-- [ ] Shared exception filter for consistent RFC 7807 Problem Details; global validation pipe for request DTOs
-- [ ] Decide and test decimal-string JSON serialization/validation for PostgreSQL `BIGINT` IDs and cursors
-- [ ] Add `@nestjs/swagger` and Swagger UI for local/dev; document each endpoint in its feature PR
-- [ ] Basic GitHub Actions CI: build and run unit tests on every PR/push; cache dependencies
-- [ ] No PostgreSQL in CI yet; add a Testcontainers/PostgreSQL integration stage in TFL-3 after TFL-2 adds the first migration and tests
-- [ ] A small TypeScript import/Nest module-boundary check if it protects a real boundary; otherwise track it in section 13
-- [ ] ADR-001: modular monolith, module-owned writes, the feed's read-only cross-module SQL joins, and TypeScript import/Nest module boundaries
-- [ ] Record the Node.js/NestJS/Prisma compatibility choice in the README or a short ADR
+- [x] **First:** verify compatible exact Node.js LTS, NestJS, `@nestjs/swagger`, JWT package, Prisma, PostgreSQL driver/adapter, and test-runner releases; build a minimal Swagger UI + JWT smoke test before committing to the baseline
+- [x] Repository, `.gitignore`, license, and README skeleton
+- [x] Verify exact versions of Nest core/platform, TypeScript, Prisma Client/Migrate, `@nestjs/swagger`, JWT package, test runner, Testcontainers, CI Node version, Docker base image, and deployment runtime
+- [x] Choose one package manager/lockfile and strict TypeScript settings; record any compatibility fallback in an ADR
+- [x] Nest CLI scaffold and domain-module folder structure
+- [x] Docker Compose for local PostgreSQL
+- [x] Prisma schema and initial Prisma Migrate baseline; establish how handwritten SQL migrations are reviewed
+- [x] `local` / `prod` environment configuration with runtime validation and no committed secrets
+- [x] Shared exception filter for consistent RFC 7807 Problem Details; global validation pipe for request DTOs
+- [x] Decide and test decimal-string JSON serialization/validation for PostgreSQL `BIGINT` IDs and cursors
+- [x] Add `@nestjs/swagger` and Swagger UI for local/dev; document each endpoint in its feature PR
+- [x] Basic GitHub Actions CI: build and run unit tests on every PR/push; cache dependencies
+- [x] No PostgreSQL in CI yet; add a Testcontainers/PostgreSQL integration stage in TFL-3 after TFL-2 adds the first migration and tests
+- [x] A small TypeScript import/Nest module-boundary check if it protects a real boundary; otherwise track it in section 13
+- [x] ADR-001: modular monolith, module-owned writes, the feed's read-only cross-module SQL joins, and TypeScript import/Nest module boundaries
+- [x] Record the Node.js/NestJS/Prisma compatibility choice in the README or a short ADR
 
 **TFL-2 [BE] — Auth & users**
 - [ ] `users` Prisma schema and migration
@@ -690,6 +690,7 @@ This is also the **knowledge index** for deliberate deferrals. Keep the exact te
 - **Node.js runtime:** event-loop delay/utilization, V8 GC, heap and RSS memory, CPU/heap profiles, allocation profiles, and latency measurements. Record workload and environment alongside any benchmark.
 - **Integration options:** caching/Redis, Kafka/RabbitMQ messaging, Nest scheduling/queues, retries and circuit breakers versus the handwritten `Fetcher` decorator, native `fetch`/HTTP clients, and WebSocket/SSE status updates. Introduce each only when a measured bottleneck or user-facing need justifies it.
 - **Test layers:** pure unit tests, Nest `TestingModule`/Supertest HTTP tests, PostgreSQL Testcontainers repository tests, and full e2e tests remain distinct tools; TFL-12 covers the minimum, while further edge cases and mutation/load testing are optional.
+- **Module boundary checks:** add a TypeScript import/Nest module-export check when the first meaningful cross-module dependency exists. TFL-1 has only empty domain modules, so ADR-001 records the rule without a vacuous automated check.
 - **Original Java learning index:** the preserved `docs/blueprint-spring-mysql.md` retains every Java/Spring/JPA/JVM keyword and story for later study; this NestJS plan does not claim those skills were exercised here.
 - **Global feed:** `GET /feed?cursor=&limit=` across all topics remains an optional API extension; Lean includes only the per-topic feed in TFL-10.
 
