@@ -1,12 +1,13 @@
 import { Transform } from 'class-transformer';
 import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import type { Credentials, TokenPair, UserResult } from './auth.types';
 import {
   DECIMAL_BIGINT_PATTERN,
   serializeDecimalBigInt,
 } from '../../common/http/decimal-bigint';
 
-export class CredentialsDto {
+export class CredentialsDto implements Credentials {
   @ApiProperty({ example: 'reader@example.com', maxLength: 254 })
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim().toLowerCase() : value,
@@ -33,14 +34,14 @@ export class UserDto {
   @ApiProperty()
   email!: string;
 
-  static from(user: { id: bigint; email: string }): UserDto {
+  static from(user: UserResult): UserDto {
     return { id: serializeDecimalBigInt(user.id), email: user.email };
   }
 }
 
-export class TokenPairDto {
+export class TokenPairDto implements TokenPair {
   @ApiProperty() accessToken!: string;
   @ApiProperty() refreshToken!: string;
-  @ApiProperty({ example: 'Bearer' }) tokenType!: string;
+  @ApiProperty({ example: 'Bearer' }) tokenType!: 'Bearer';
   @ApiProperty({ example: 900 }) expiresIn!: number;
 }

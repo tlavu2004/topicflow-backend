@@ -15,6 +15,10 @@
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
     "db:deploy": "prisma migrate deploy",
+    "infra:up": "docker compose --env-file .env.local up -d --wait",
+    "infra:down": "docker compose --env-file .env.local down",
+    "infra:ps": "docker compose --env-file .env.local ps",
+    "infra:logs": "docker compose --env-file .env.local logs -f postgres",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -22,6 +26,8 @@
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "test": "jest",
+    "test:unit": "jest --runInBand",
+    "test:ci-tools": "node --test tools/testing/*.test.cjs",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
@@ -90,6 +96,16 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
+    "testLocationInResults": true,
+    "reporters": [
+      "default",
+      [
+        "<rootDir>/../tools/testing/ci-reporter.cjs",
+        {
+          "group": "unit"
+        }
+      ]
+    ],
     "setupFiles": [
       "<rootDir>/../test/setup-env.ts"
     ],

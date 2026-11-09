@@ -15,7 +15,10 @@ import { randomUUID } from 'node:crypto';
 import * as argon2 from 'argon2';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
-import { JWT_AUDIENCE, JWT_ISSUER } from '../src/modules/identity/auth.service';
+import {
+  JWT_AUDIENCE,
+  JWT_ISSUER,
+} from '../src/modules/identity/token.service';
 import { LoginLimitGuard } from '../src/modules/identity/login-limit.guard';
 import { startPostgres } from './helpers/postgres';
 import {

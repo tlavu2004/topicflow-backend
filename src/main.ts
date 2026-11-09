@@ -5,6 +5,7 @@ import { configureSwagger } from './common/http/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.enableShutdownHooks();
   const environment = app.get(ConfigService);
 
   if (environment.getOrThrow<string>('NODE_ENV') !== 'production') {

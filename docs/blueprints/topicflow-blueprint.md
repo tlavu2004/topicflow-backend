@@ -366,9 +366,9 @@ How to read this section:
 - [x] Tests: duplicate email registration, wrong password, expired token
 
 **TFL-3 [BE] — CI integration-test profile** *(after TFL-2, before TFL-4)*
-- [ ] Separate unit, database integration, and HTTP e2e tests using test scripts/tags
-- [ ] CI starts PostgreSQL Testcontainers, applies Prisma migrations, and executes integration tests
-- [ ] Retain logs/test reports on failure; do not store secrets or real data in artifacts
+- [x] Separate unit, database integration, and HTTP e2e tests using test scripts/tags
+- [x] CI starts PostgreSQL Testcontainers, applies Prisma migrations, and executes integration tests
+- [x] Retain logs/test reports on failure; do not store secrets or real data in artifacts
 
 ### P1 — Core domain
 

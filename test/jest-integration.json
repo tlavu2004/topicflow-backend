@@ -5,6 +5,11 @@
   "setupFiles": ["<rootDir>/test/setup-env.ts"],
   "testRegex": "\\.integration-spec\\.ts$",
   "testTimeout": 120000,
+  "testLocationInResults": true,
+  "reporters": [
+    "default",
+    ["<rootDir>/tools/testing/ci-reporter.cjs", { "group": "integration" }]
+  ],
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },

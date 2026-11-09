@@ -10,6 +10,7 @@ Thumbs.db
 node_modules/
 dist/
 coverage/
+test-results/
 .local/
 .nest-seed/
 src/generated/prisma/
@@ -18,4 +19,5 @@ src/generated/prisma/
 # Local configuration
 .env
 .env.*
-!.env.example
+!.env.local.example
+!.env.production.example

@@ -3,7 +3,12 @@
   "rootDir": ".",
   "setupFiles": ["<rootDir>/setup-env.ts"],
   "testEnvironment": "node",
-  "testRegex": ".e2e-spec.ts$",
+  "testRegex": "\\.e2e-spec\\.ts$",
+  "testLocationInResults": true,
+  "reporters": [
+    "default",
+    ["<rootDir>/../tools/testing/ci-reporter.cjs", { "group": "e2e" }]
+  ],
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
