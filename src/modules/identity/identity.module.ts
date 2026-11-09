@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
-import { PrismaService } from '../../database/prisma.service';
+import { DatabaseModule } from '../../database/database.module';
 import { IdentityRepository } from './identity.repository';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
@@ -9,10 +9,9 @@ import { LoginLimitGuard } from './login-limit.guard';
 import { IdentityAccessService } from './identity-access.service';
 
 @Module({
-  imports: [JwtModule.register({})],
+  imports: [DatabaseModule, JwtModule.register({})],
   controllers: [AuthController],
   providers: [
-    PrismaService,
     IdentityRepository,
     AuthService,
     IdentityAccessService,
