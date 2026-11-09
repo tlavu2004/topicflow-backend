@@ -68,6 +68,7 @@ npm run test:e2e -- --runInBand
 npm run test:integration
 npm run lint
 npm run test:architecture
+npm run test:ci-tools
 docker compose config
 ```
 
@@ -75,4 +76,23 @@ Stop the local database with `docker compose down` when you are finished; the bi
 
 The Swagger UI and OpenAPI JSON are enabled outside production. `/health` is a process liveness check; database readiness and application features will be added in their stories.
 
-CI runs build, lint, Prisma schema validation, and unit/HTTP smoke tests on Node 24.22.2. `test:integration` requires Docker, starts disposable PostgreSQL 17, applies committed migrations, and tests registration, password verification, JWT boundaries, refresh concurrency, logout, BIGINT serialization and throttling. Its reusable helper is in `test/helpers/postgres.ts`. Prisma's runtime uses dynamic imports, so this Jest script enables Node VM modules. Adding this database suite to CI remains TFL-3.
+## CI and test profiles (TFL-3)
+
+| Profile              | Command                           | Discovery                  | Database                            |
+| -------------------- | --------------------------------- | -------------------------- | ----------------------------------- |
+| Unit                 | `npm run test:unit`               | `src/**/*.spec.ts`         | None                                |
+| HTTP smoke/e2e       | `npm run test:e2e -- --runInBand` | `test/**/*.e2e-spec.ts`    | None                                |
+| Database integration | `npm run test:integration`        | `**/*.integration-spec.ts` | Disposable PostgreSQL 17 via Docker |
+
+`npm test` remains the unit-test entry point. CI adds `--ci` to all three profiles. Run `npm run db:generate` before testing a fresh checkout. HTTP smoke tests compile the app but do not issue database queries. Integration tests run serially, use the reusable `test/helpers/postgres.ts`, apply committed migrations before creating the app and stop the container after the suite. Migration execution has a 60-second timeout; Jest integration tests have a 120-second timeout. Prisma's runtime uses dynamic imports, so the integration script enables Node VM modules. No Compose database, real data or repository secrets are needed.
+
+`.github/workflows/ci.yml` runs on pushes, PRs targeting `main`, and manual dispatch. Two independent jobs run on Ubuntu/Node 24.22.2:
+
+- **Application checks and unit/HTTP tests:** clean install, Prisma validation/generation, build, lint, architecture checks, diagnostics-tool tests, then unit and HTTP tests. HTTP tests also run after a unit-test failure.
+- **PostgreSQL integration tests:** clean install, generate Prisma Client, verify Docker, then run migrations and database tests through Testcontainers. GitHub-hosted Ubuntu runners provide Docker; there is no separate PostgreSQL service or shared database.
+
+Each job has a 15-minute timeout. New runs cancel older runs for the same event/ref; push and PR runs do not cancel one another. Workflow permissions are `contents: read`.
+
+The custom Jest reporter writes ignored `test-results/<profile>/report.json` and `execution.log`. Reports include suite paths relative to that profile's Jest root, assertion line numbers/status/duration and counts. Database setup adds `integration/postgres.log` with startup/migration phase outcomes. Failure artifacts are named `application-test-diagnostics` and `postgres-integration-diagnostics`, retained for three days, and upload only these explicitly listed files. If installation or configuration fails before tests start, there may be no report; inspect the failed Actions step.
+
+Artifacts deliberately omit raw failure messages, test titles, console output, environment dumps, `.env`, DB contents, passwords, connection strings and JWTs. Use the corresponding Actions test step for detailed assertion output; never add real credentials/data to tests. `npm run test:ci-tools` checks reporter failure output with a synthetic secret and verifies the artifact excludes it. Successful runs keep reports locally but do not upload failure artifacts. Release/container publishing, coverage thresholds and OpenAPI snapshot gates remain outside TFL-3.
