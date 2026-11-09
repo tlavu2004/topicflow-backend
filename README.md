@@ -53,7 +53,11 @@ Only SHA-256 hashes of high-entropy refresh tokens are persisted. Rotation atomi
 
 Register and login share a limit of 10 requests per minute per IP, including invalid requests. This in-memory limiter resets on restart, is independent per instance, and caps tracked IPs at 10,000. Express proxy trust is not enabled: behind a reverse proxy the visible IP may be shared. Configure trusted proxy hops and a shared limiter when deploying multiple instances. The limiter is a basic abuse control, not a distributed lockout system.
 
-Controllers and application services use repositories; ESLint rejects direct database/Prisma imports in those files. SQL-specific features can be added to reviewed Prisma migration SQL. Use `prisma migrate dev --create-only --name <change>` locally, review the SQL, then `prisma migrate dev` and `npm run db:generate`. Deploy committed migrations with `npm run db:deploy`; do not edit applied migrations.
+Controllers and application services use repositories. ESLint checks domain encapsulation across all production TypeScript files: other modules import only `src/modules/<name>/index.ts`, shared infrastructure cannot import domains, and only repositories/module wiring may import database infrastructure. Tests may inspect internals. `npm run test:architecture` verifies the rule against allowed imports and forbidden static, type, re-export, dynamic and CommonJS imports. SQL write ownership and cyclic domain dependencies still require review. See [ADR-001](docs/adr/001-modular-monolith-and-data-boundaries.md).
+
+For another domain to authenticate a request, import `IdentityModule` in its Nest module, then use `AccessTokenGuard` or inject `IdentityAccessService`, all from `src/modules/identity`. The service exposes only `authenticateAccessToken(token)`, returning `{ userId: string }`; it does not expose registration, refresh or database operations. The guard supplies `AuthenticatedRequest.userId` as a `bigint` for internal queries. Serialize it through the shared decimal-ID helper for HTTP responses. Resource ownership remains the responsibility of the consuming module. An integration-test consumer verifies the exported guard and service work without redeclaring identity providers.
+
+SQL-specific features can be added to reviewed Prisma migration SQL. Use `prisma migrate dev --create-only --name <change>` locally, review the SQL, then `prisma migrate dev` and `npm run db:generate`. Deploy committed migrations with `npm run db:deploy`; do not edit applied migrations.
 
 ## Checks
 
@@ -63,6 +67,7 @@ npm test -- --runInBand
 npm run test:e2e -- --runInBand
 npm run test:integration
 npm run lint
+npm run test:architecture
 docker compose config
 ```
 

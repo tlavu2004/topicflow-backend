@@ -24,5 +24,6 @@ jobs:
       - run: npm run db:generate
       - run: npm run build
       - run: npm run lint
+      - run: npm run test:architecture
       - run: npm test -- --runInBand
       - run: npm run test:e2e -- --runInBand

@@ -26,7 +26,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./test/jest-integration.json --runInBand"
+    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./test/jest-integration.json --runInBand",
+    "test:architecture": "node tools/eslint/module-boundaries.test.mjs"
   },
   "dependencies": {
     "@nestjs/common": "11.2.8",

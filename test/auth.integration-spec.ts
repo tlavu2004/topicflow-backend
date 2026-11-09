@@ -1,5 +1,12 @@
 import { Test } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  INestApplication,
+  Module,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import request from 'supertest';
@@ -11,6 +18,28 @@ import { PrismaService } from '../src/database/prisma.service';
 import { JWT_AUDIENCE, JWT_ISSUER } from '../src/modules/identity/auth.service';
 import { LoginLimitGuard } from '../src/modules/identity/login-limit.guard';
 import { startPostgres } from './helpers/postgres';
+import {
+  AccessTokenGuard,
+  IdentityAccessService,
+  IdentityModule,
+} from '../src/modules/identity';
+import type { AuthenticatedRequest } from '../src/modules/identity';
+
+// Consumer wiring uses only identity's public entry and exported providers.
+@Controller('_consumer')
+class ConsumerController {
+  constructor(private readonly identity: IdentityAccessService) {}
+
+  @Get()
+  @UseGuards(AccessTokenGuard)
+  principal(@Req() request: AuthenticatedRequest) {
+    expect(this.identity).toBeInstanceOf(IdentityAccessService);
+    return { userId: request.userId.toString() };
+  }
+}
+
+@Module({ imports: [IdentityModule], controllers: [ConsumerController] })
+class ConsumerModule {}
 
 interface Tokens {
   accessToken: string;
@@ -28,7 +57,9 @@ describe('Identity with migrated PostgreSQL', () => {
 
   beforeAll(async () => {
     database = await startPostgres();
-    const module = await Test.createTestingModule({ imports: [AppModule] })
+    const module = await Test.createTestingModule({
+      imports: [AppModule, ConsumerModule],
+    })
       .overrideProvider(ConfigService)
       .useValue(
         new ConfigService({ ...process.env, DATABASE_URL: database.url }),
@@ -151,6 +182,16 @@ describe('Identity with migrated PostgreSQL', () => {
         },
       );
     const valid = sign(user.id.toString(), 900);
+    await request(app.getHttpServer()).get('/_consumer').expect(401);
+    const consumer = await request(app.getHttpServer())
+      .get('/_consumer')
+      .auth(valid, { type: 'bearer' })
+      .expect(200);
+    expect(consumer.body).toEqual({ userId: '9007199254740993' });
+    const principal = await app
+      .get(IdentityAccessService)
+      .authenticateAccessToken(valid);
+    expect(principal).toEqual({ userId: '9007199254740993' });
     const response = await request(app.getHttpServer())
       .get('/me')
       .auth(valid, { type: 'bearer' })

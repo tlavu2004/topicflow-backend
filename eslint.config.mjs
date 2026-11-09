@@ -3,6 +3,7 @@ import eslint from '@eslint/js';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import moduleBoundaries from './tools/eslint/module-boundaries.mjs';
 
 export default tseslint.config(
   {
@@ -11,6 +12,14 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   eslintPluginPrettierRecommended,
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['src/**/*.spec.ts'],
+    plugins: {
+      architecture: { rules: { 'module-boundaries': moduleBoundaries } },
+    },
+    rules: { 'architecture/module-boundaries': 'error' },
+  },
   {
     files: ['src/modules/**/*.controller.ts', 'src/modules/**/*.service.ts'],
     rules: {
