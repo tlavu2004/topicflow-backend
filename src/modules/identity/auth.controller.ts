@@ -44,8 +44,8 @@ export class AuthController {
     status: 429,
     description: 'Authentication attempt limit reached',
   })
-  register(@Body() dto: CredentialsDto) {
-    return this.auth.register(dto);
+  async register(@Body() dto: CredentialsDto): Promise<UserDto> {
+    return UserDto.from(await this.auth.register(dto));
   }
 
   @Post('auth/login')
@@ -88,7 +88,7 @@ export class AuthController {
   @UseGuards(AccessTokenGuard)
   @ApiBearerAuth()
   @ApiOkResponse({ type: UserDto })
-  me(@Req() request: AuthenticatedRequest) {
-    return this.auth.me(request.userId);
+  async me(@Req() request: AuthenticatedRequest): Promise<UserDto> {
+    return UserDto.from(await this.auth.me(request.userId));
   }
 }

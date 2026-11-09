@@ -11,7 +11,7 @@ import {
   parseDecimalBigInt,
   serializeDecimalBigInt,
 } from '../../common/http/decimal-bigint';
-import { CredentialsDto, UserDto } from './auth.dto';
+import type { Credentials, TokenPair, UserResult } from './auth.types';
 import { IdentityRepository } from './identity.repository';
 
 export const JWT_ISSUER = 'topicflow';
@@ -32,7 +32,7 @@ export class AuthService {
     private readonly config: ConfigService,
   ) {}
 
-  async register(dto: CredentialsDto): Promise<UserDto> {
+  async register(dto: Credentials): Promise<UserResult> {
     const passwordHash = await argon2.hash(dto.password, {
       type: argon2.argon2id,
       memoryCost: 19456,
@@ -40,9 +40,8 @@ export class AuthService {
       parallelism: 1,
     });
     try {
-      return UserDto.from(
-        await this.repository.createUser(dto.email, passwordHash),
-      );
+      const user = await this.repository.createUser(dto.email, passwordHash);
+      return { id: user.id, email: user.email };
     } catch (error) {
       if (this.repository.isDuplicateEmail(error))
         throw new ConflictException('Email already registered');
@@ -50,7 +49,7 @@ export class AuthService {
     }
   }
 
-  async login(dto: CredentialsDto) {
+  async login(dto: Credentials): Promise<TokenPair> {
     const user = await this.repository.findByEmail(dto.email);
     if (!user) {
       // Match the expensive work for unknown accounts without storing a dummy password.
@@ -98,7 +97,7 @@ export class AuthService {
     }
   }
 
-  async refresh(token: string) {
+  async refresh(token: string): Promise<TokenPair> {
     const claims = await this.verify(token, 'refresh');
     const userId = parseDecimalBigInt(claims.sub);
     const next = await this.issue(userId);
@@ -120,10 +119,10 @@ export class AuthService {
     );
   }
 
-  async me(id: bigint): Promise<UserDto> {
+  async me(id: bigint): Promise<UserResult> {
     const user = await this.repository.findById(id);
     if (!user) throw new UnauthorizedException('User no longer exists');
-    return UserDto.from(user);
+    return { id: user.id, email: user.email };
   }
 
   private hash(token: string): string {
@@ -154,7 +153,7 @@ export class AuthService {
       tokens: {
         accessToken,
         refreshToken,
-        tokenType: 'Bearer',
+        tokenType: 'Bearer' as const,
         expiresIn: ACCESS_SECONDS,
       },
       session: {
