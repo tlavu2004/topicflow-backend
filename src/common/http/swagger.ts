@@ -6,6 +6,16 @@ export function configureSwagger(app: INestApplication): void {
     .setTitle('TopicFlow API')
     .setVersion('0.1.0')
     .addBearerAuth()
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description:
+          'Refresh token returned by login; sent in Authorization header',
+      },
+      'refresh-token',
+    )
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document, {

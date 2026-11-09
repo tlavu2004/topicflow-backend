@@ -12,6 +12,29 @@ export default tseslint.config(
   ...tseslint.configs.recommendedTypeChecked,
   eslintPluginPrettierRecommended,
   {
+    files: ['src/modules/**/*.controller.ts', 'src/modules/**/*.service.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '**/database/**',
+                '**/generated/prisma/**',
+                '@prisma/client',
+                '@prisma/client/**',
+                '@prisma/adapter-pg',
+                'pg',
+              ],
+              message: 'Use a module-owned repository for database access.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     languageOptions: {
       globals: {
         ...globals.node,
@@ -29,7 +52,7 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
-      "prettier/prettier": ["error", { endOfLine: "auto" }],
+      'prettier/prettier': ['error', { endOfLine: 'auto' }],
     },
   },
 );
