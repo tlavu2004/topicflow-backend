@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { AccessTokenGuard } from './access-token.guard';
 import { LoginLimitGuard } from './login-limit.guard';
+import { IdentityAccessService } from './identity-access.service';
 
 @Module({
   imports: [JwtModule.register({})],
@@ -14,9 +15,10 @@ import { LoginLimitGuard } from './login-limit.guard';
     PrismaService,
     IdentityRepository,
     AuthService,
+    IdentityAccessService,
     AccessTokenGuard,
     LoginLimitGuard,
   ],
-  exports: [AccessTokenGuard, AuthService],
+  exports: [AccessTokenGuard, IdentityAccessService],
 })
 export class IdentityModule {}

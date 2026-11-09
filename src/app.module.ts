@@ -4,12 +4,12 @@ import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { ProblemDetailsFilter } from './common/http/problem-details.filter';
 import { validateEnvironment } from './config/environment';
-import { ArticleModule } from './modules/article/article.module';
-import { CrawlerModule } from './modules/crawler/crawler.module';
-import { IdentityModule } from './modules/identity/identity.module';
-import { MatchingModule } from './modules/matching/matching.module';
-import { SourceModule } from './modules/source/source.module';
-import { TopicModule } from './modules/topic/topic.module';
+import { ArticleModule } from './modules/article';
+import { CrawlerModule } from './modules/crawler';
+import { IdentityModule } from './modules/identity';
+import { MatchingModule } from './modules/matching';
+import { SourceModule } from './modules/source';
+import { TopicModule } from './modules/topic';
 
 @Module({
   imports: [
