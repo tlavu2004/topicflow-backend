@@ -343,13 +343,13 @@ How to read this section:
 - [x] Record the Node.js/NestJS/Prisma compatibility choice in the README or a short ADR
 
 **TFL-2 [BE] — Auth & users**
-- [ ] `users` Prisma schema and migration; reuse TFL-1's decimal-string `BIGINT` ID helper in request/response DTOs and test IDs beyond JavaScript's safe-integer range
-- [ ] First `identity` repository owns user-table writes and is the only identity class that injects `PrismaService`; add a scoped ESLint `no-restricted-imports` rule barring direct Prisma imports in controllers/application services, then extend it as repositories appear in other modules
-- [ ] Registration/login and password hashing (BCrypt/Argon2)
-- [ ] JWT access and refresh tokens in headers; Nest guard and ownership checks; define refresh-token storage/rotation or a documented minimal revocation limit
-- [ ] Set up a reusable PostgreSQL Testcontainers helper for later PRs
-- [ ] Set a basic login-attempt limit; document its in-process/free-tier limits
-- [ ] Tests: duplicate email registration, wrong password, expired token
+- [x] `users` Prisma schema and migration; reuse TFL-1's decimal-string `BIGINT` ID helper in request/response DTOs and test IDs beyond JavaScript's safe-integer range
+- [x] First `identity` repository owns user-table writes and is the only identity class that injects `PrismaService`; add a scoped ESLint `no-restricted-imports` rule barring direct Prisma imports in controllers/application services, then extend it as repositories appear in other modules
+- [x] Registration/login and password hashing (BCrypt/Argon2)
+- [x] JWT access and refresh tokens in headers; Nest guard and ownership checks; define refresh-token storage/rotation or a documented minimal revocation limit
+- [x] Set up a reusable PostgreSQL Testcontainers helper for later PRs
+- [x] Set a basic login-attempt limit; document its in-process/free-tier limits
+- [x] Tests: duplicate email registration, wrong password, expired token
 
 **TFL-3 [BE] — CI integration-test profile** *(after TFL-2, before TFL-4)*
 - [ ] Separate unit, database integration, and HTTP e2e tests using test scripts/tags
