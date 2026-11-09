@@ -22,6 +22,8 @@
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "test": "jest",
+    "test:unit": "jest --runInBand",
+    "test:ci-tools": "node --test tools/testing/*.test.cjs",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
@@ -90,6 +92,16 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
+    "testLocationInResults": true,
+    "reporters": [
+      "default",
+      [
+        "<rootDir>/../tools/testing/ci-reporter.cjs",
+        {
+          "group": "unit"
+        }
+      ]
+    ],
     "setupFiles": [
       "<rootDir>/../test/setup-env.ts"
     ],
