@@ -4,6 +4,7 @@ import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { ProblemDetailsFilter } from './common/http/problem-details.filter';
 import { validateEnvironment } from './config/environment';
+import { loadEnvironment } from './config/load-environment';
 import { ArticleModule } from './modules/article';
 import { CrawlerModule } from './modules/crawler';
 import { IdentityModule } from './modules/identity';
@@ -11,11 +12,13 @@ import { MatchingModule } from './modules/matching';
 import { SourceModule } from './modules/source';
 import { TopicModule } from './modules/topic';
 
+loadEnvironment();
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      ignoreEnvFile: process.env.NODE_ENV === 'production',
+      ignoreEnvFile: true,
       validate: validateEnvironment,
     }),
     IdentityModule,

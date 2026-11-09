@@ -19,4 +19,5 @@ src/generated/prisma/
 # Local configuration
 .env
 .env.*
-!.env.example
+!.env.local.example
+!.env.production.example
