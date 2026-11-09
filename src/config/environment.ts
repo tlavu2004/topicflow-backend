@@ -4,6 +4,8 @@ export interface EnvironmentConfig {
   NODE_ENV: AppEnvironment;
   PORT: number;
   DATABASE_URL: string;
+  JWT_ACCESS_SECRET: string;
+  JWT_REFRESH_SECRET: string;
 }
 
 export function validateEnvironment(
@@ -41,10 +43,26 @@ export function validateEnvironment(
     throw new Error('DATABASE_URL must be a valid PostgreSQL URL');
   }
 
+  const accessSecret = values.JWT_ACCESS_SECRET;
+  const refreshSecret = values.JWT_REFRESH_SECRET;
+  const jwtSecrets: [string, unknown][] = [
+    ['JWT_ACCESS_SECRET', accessSecret],
+    ['JWT_REFRESH_SECRET', refreshSecret],
+  ];
+  for (const [name, secret] of jwtSecrets) {
+    if (typeof secret !== 'string' || Buffer.byteLength(secret) < 32) {
+      throw new Error(`${name} must contain at least 32 bytes`);
+    }
+  }
+  if (accessSecret === refreshSecret)
+    throw new Error('JWT secrets must be different');
+
   return {
     ...values,
     NODE_ENV: nodeEnv as AppEnvironment,
     PORT: port,
     DATABASE_URL: databaseUrl,
+    JWT_ACCESS_SECRET: accessSecret as string,
+    JWT_REFRESH_SECRET: refreshSecret as string,
   };
 }

@@ -95,6 +95,20 @@ flowchart TB
 TypeScript root: `src/`, with one Nest module per domain (`identity`, `source`, `topic`, `crawler`, `article`, `matching`) and shared infrastructure kept outside domain modules.
 
 ### 2.1 Module boundaries
+- Each domain has a single public TypeScript entry point, `src/modules/<name>/index.ts`; consumers and `AppModule` import through it. Internal files use direct imports within their own module. Nest exports expose only the providers required by those public contracts. Repositories, Prisma models, HTTP DTOs and internal workflows remain private. See ADR-001 for the complete contract and transaction rules.
+- Shared infrastructure never imports a domain module. Only domain repositories and module composition files may import database infrastructure. Cross-module transactions and circular dependencies are disallowed; introduce a new consistency design explicitly before adding either. A local ESLint rule checks public-entry and database imports; SQL ownership and dependency cycles remain review responsibilities.
+
+| Module | Owned writes | Public capability / allowed domain dependencies |
+| --- | --- | --- |
+| `identity` | users, refresh sessions | Access-token verification and authenticated principal/guard; no domain dependency |
+| `source` | source catalog, user_source | Catalog and user selections, selected-source reads for crawling; identity guard only |
+| `topic` | topics, include/exclude keywords | User topic operations and topic/keyword reads for matching; identity guard only |
+| `article` | articles, user read state | Article ingestion/dedup and feed/read operations; identity guard only; feed has the read-only join exception below |
+| `matching` | topic_article associations | Match new articles and reconcile/backfill; topic/source/article public read capabilities |
+| `crawler` | crawl runs and per-source crawl state | Trigger/status and orchestration; identity/source/article/matching public capabilities |
+
+This table describes target capabilities, not unused service scaffolding to implement now. User resource operations receive the authenticated principal and enforce ownership in the owning module. Topic/source changes can be reconciled by the scheduled matching flow; they must not create a reverse dependency on matching. Identity's public access service exposes access-token verification only; the auth controller's register/login/refresh/logout workflows stay private.
+
 - Each module owns writes to its tables and exposes application services for business operations. This is a code convention with one shared `PrismaClient`: only a module's repository classes inject `PrismaService` to write its tables; controllers/application services call those repositories or exported application services. The `article` feed read model may use read-only SQL joins across `topic`, `article`, and `user_source`; document that exception in ADR-001. Import rules check TypeScript dependencies, not SQL joins.
 - `crawler` calls the public `matching` application service after persisting new articles. An `ArticlesIngested` event is a later decoupling option; an in-process Nest event emitter does not provide durable delivery.
 - Keep Nest module exports narrow. From TFL-2's first repository, add a scoped ESLint `no-restricted-imports` rule for controllers and application services so they cannot import `PrismaService`/generated Prisma Client directly; database infrastructure, repositories, and tests are exceptions. Review write ownership separately because static import rules cannot prove which table a query changes.
@@ -343,13 +357,13 @@ How to read this section:
 - [x] Record the Node.js/NestJS/Prisma compatibility choice in the README or a short ADR
 
 **TFL-2 [BE] — Auth & users**
-- [ ] `users` Prisma schema and migration; reuse TFL-1's decimal-string `BIGINT` ID helper in request/response DTOs and test IDs beyond JavaScript's safe-integer range
-- [ ] First `identity` repository owns user-table writes and is the only identity class that injects `PrismaService`; add a scoped ESLint `no-restricted-imports` rule barring direct Prisma imports in controllers/application services, then extend it as repositories appear in other modules
-- [ ] Registration/login and password hashing (BCrypt/Argon2)
-- [ ] JWT access and refresh tokens in headers; Nest guard and ownership checks; define refresh-token storage/rotation or a documented minimal revocation limit
-- [ ] Set up a reusable PostgreSQL Testcontainers helper for later PRs
-- [ ] Set a basic login-attempt limit; document its in-process/free-tier limits
-- [ ] Tests: duplicate email registration, wrong password, expired token
+- [x] `users` Prisma schema and migration; reuse TFL-1's decimal-string `BIGINT` ID helper in request/response DTOs and test IDs beyond JavaScript's safe-integer range
+- [x] First `identity` repository owns user-table writes and is the only identity class that injects `PrismaService`; add a scoped ESLint `no-restricted-imports` rule barring direct Prisma imports in controllers/application services, then extend it as repositories appear in other modules
+- [x] Registration/login and password hashing (BCrypt/Argon2)
+- [x] JWT access and refresh tokens in headers; Nest guard and ownership checks; define refresh-token storage/rotation or a documented minimal revocation limit
+- [x] Set up a reusable PostgreSQL Testcontainers helper for later PRs
+- [x] Set a basic login-attempt limit; document its in-process/free-tier limits
+- [x] Tests: duplicate email registration, wrong password, expired token
 
 **TFL-3 [BE] — CI integration-test profile** *(after TFL-2, before TFL-4)*
 - [ ] Separate unit, database integration, and HTTP e2e tests using test scripts/tags
