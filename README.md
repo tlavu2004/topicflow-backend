@@ -57,6 +57,8 @@ Controllers and application services use repositories. ESLint checks domain enca
 
 For another domain to authenticate a request, import `IdentityModule` in its Nest module, then use `AccessTokenGuard` or inject `IdentityAccessService`, all from `src/modules/identity`. The service exposes only `authenticateAccessToken(token)`, returning `{ userId: string }`; it does not expose registration, refresh or database operations. The guard supplies `AuthenticatedRequest.userId` as a `bigint` for internal queries. Serialize it through the shared decimal-ID helper for HTTP responses. Resource ownership remains the responsibility of the consuming module. An integration-test consumer verifies the exported guard and service work without redeclaring identity providers.
 
+Domain modules needing persistence import `DatabaseModule` from `src/database/database.module.ts`; do not add `PrismaService` to each module's providers. This shares one client/pool per application context. Only repositories inject it for queries. Nest shutdown hooks close the client on application termination. Identity keeps plain application contracts in `auth.types.ts`, HTTP DTOs/serialization in its controller boundary, and private `PasswordService`/`TokenService` providers for cryptography. The public access service depends only on token verification, while `AuthService` coordinates users and refresh-session persistence.
+
 SQL-specific features can be added to reviewed Prisma migration SQL. Use `prisma migrate dev --create-only --name <change>` locally, review the SQL, then `prisma migrate dev` and `npm run db:generate`. Deploy committed migrations with `npm run db:deploy`; do not edit applied migrations.
 
 ## Checks

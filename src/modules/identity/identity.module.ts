@@ -7,6 +7,8 @@ import { AuthController } from './auth.controller';
 import { AccessTokenGuard } from './access-token.guard';
 import { LoginLimitGuard } from './login-limit.guard';
 import { IdentityAccessService } from './identity-access.service';
+import { PasswordService } from './password.service';
+import { TokenService } from './token.service';
 
 @Module({
   imports: [DatabaseModule, JwtModule.register({})],
@@ -14,6 +16,8 @@ import { IdentityAccessService } from './identity-access.service';
   providers: [
     IdentityRepository,
     AuthService,
+    PasswordService,
+    TokenService,
     IdentityAccessService,
     AccessTokenGuard,
     LoginLimitGuard,
