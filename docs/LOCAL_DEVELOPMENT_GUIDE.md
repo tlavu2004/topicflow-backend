@@ -1,4 +1,4 @@
-# Running TopicFlow
+# TopicFlow Local Development Guide
 
 Run commands from the repository root. The backend currently runs on Node.js; Compose runs PostgreSQL only. There is no backend Dockerfile yet.
 
