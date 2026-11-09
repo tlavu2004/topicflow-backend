@@ -3,15 +3,25 @@ name: Backend CI
 on:
   push:
   pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: backend-ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # CLI configuration only: integration tests replace this with a disposable DB.
+  DATABASE_URL: postgresql://topicflow:ci_only@localhost:5432/topicflow?schema=public
+
 jobs:
-  baseline:
+  verify:
+    name: Application checks and unit/HTTP tests
     runs-on: ubuntu-latest
-    env:
-      DATABASE_URL: postgresql://topicflow:ci_only@localhost:5432/topicflow?schema=public
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -25,5 +35,51 @@ jobs:
       - run: npm run build
       - run: npm run lint
       - run: npm run test:architecture
-      - run: npm test -- --runInBand
-      - run: npm run test:e2e -- --runInBand
+      - run: npm run test:ci-tools
+      - name: Unit tests
+        id: unit
+        run: npm run test:unit -- --ci
+      - name: HTTP smoke tests
+        if: ${{ !cancelled() && (steps.unit.outcome == 'success' || steps.unit.outcome == 'failure') }}
+        run: npm run test:e2e -- --ci --runInBand
+      - name: Upload application test diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: application-test-diagnostics
+          path: |
+            test-results/unit/report.json
+            test-results/unit/execution.log
+            test-results/e2e/report.json
+            test-results/e2e/execution.log
+          if-no-files-found: ignore
+          retention-days: 3
+
+  integration:
+    name: PostgreSQL integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm install --global npm@11.11.1
+      - run: npm ci
+      - run: npm run db:generate
+      - name: Check Docker engine
+        run: docker info --format '{{.ServerVersion}}'
+      - name: Migrate disposable PostgreSQL and test
+        run: npm run test:integration -- --ci
+      - name: Upload database test diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: postgres-integration-diagnostics
+          path: |
+            test-results/integration/report.json
+            test-results/integration/execution.log
+            test-results/integration/postgres.log
+          if-no-files-found: ignore
+          retention-days: 3
