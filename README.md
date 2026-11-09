@@ -26,14 +26,14 @@ Node 24 satisfies the package engine requirements of Nest 11, Prisma 7, Jest 30,
 ## Local setup
 
 1. Use Node.js 24.22.2 (`.nvmrc`). Run `npm ci` from this repository on drive D.
-2. Copy `.env.example` to `.env`. The example values are **local development only**; set production credentials separately.
-3. Start Docker Desktop, then run `docker compose up -d` from this repository. PostgreSQL data binds to `.local/postgres-data` on drive D and is ignored by Git.
+2. Copy `.env.local.example` to `.env.local`. The example values are **local development only**; set production credentials separately. Existing users can copy their ignored `.env` to `.env.local` instead; ensure `NODE_ENV=development` and both JWT secrets are present. Legacy `.env` is no longer loaded by the app or Prisma CLI.
+3. Start Docker Desktop, then run `npm run infra:up` from this repository. This selects `.env.local` explicitly for Compose. PostgreSQL data binds to `.local/postgres-data` on drive D and is ignored by Git.
 4. Run `npm run db:validate`, `npm run db:generate`, and `npm run db:deploy`.
 5. Run `npm run start:dev`. Open `http://localhost:3000/health`, `http://localhost:3000/docs`, or `http://localhost:3000/docs/json`.
 
 The schema includes `users` and `refresh_sessions`. Review the Prisma schema and SQL migration together. See [ADR-001](docs/adr/001-modular-monolith-and-data-boundaries.md) for the handwritten SQL review rule and module boundaries.
 
-`NODE_ENV=development` is the local default. Production uses `NODE_ENV=production`, `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, and optional `PORT` (default 3000); startup validates these values, and production ignores local `.env` files. JWT secrets must be distinct, at least 32 bytes, and randomly generated for deployment; example secrets are local-only. Add both JWT variables from `.env.example` to an existing local `.env`. Errors use `application/problem+json`, and DTO input is validated globally. PostgreSQL `BIGINT` IDs remain **positive decimal strings** at the API boundary; reuse the TFL-1 helper and never serialize a JavaScript `bigint` directly to JSON.
+The shared Nest/Prisma loader reads `.env.local` only in development, with exported environment variables taking priority. Test, production and `CI=true` never load a local env file. Set `NODE_ENV=production` externally before starting production or running production migrations; `.env.production.example` is a hosting reference, not a file loader. Runtime requires `DATABASE_URL`, distinct `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` (at least 32 bytes each) and optional `PORT` (default 3000). Prisma CLI needs the database URL but does not require JWT keys. Errors use `application/problem+json`, and DTO input is validated globally. PostgreSQL `BIGINT` IDs remain **positive decimal strings** at the API boundary; reuse the TFL-1 helper and never serialize a JavaScript `bigint` directly to JSON. See [Running TopicFlow](docs/running.md) for the full English setup, environment and troubleshooting guide.
 
 ## Authentication (TFL-2)
 
@@ -71,10 +71,10 @@ npm run test:integration
 npm run lint
 npm run test:architecture
 npm run test:ci-tools
-docker compose config
+docker compose --env-file .env.local config --quiet
 ```
 
-Stop the local database with `docker compose down` when you are finished; the bind-mounted data on drive D is retained.
+Stop the local database with `npm run infra:down` when you are finished; the bind-mounted data on drive D is retained.
 
 The Swagger UI and OpenAPI JSON are enabled outside production. `/health` is a process liveness check; database readiness and application features will be added in their stories.
 
